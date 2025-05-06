@@ -3,6 +3,7 @@ package top.ningmao.myspring;
 import org.junit.jupiter.api.Test;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
 import top.ningmao.myspring.bean.factory.support.DefaultListableBeanFactory;
+import top.ningmao.myspring.service.HelloService;
 
 /**
  * 测试 IOC1

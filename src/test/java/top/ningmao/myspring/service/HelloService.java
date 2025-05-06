@@ -1,4 +1,4 @@
-package top.ningmao.myspring;
+package top.ningmao.myspring.service;
 
 public class HelloService {
     
