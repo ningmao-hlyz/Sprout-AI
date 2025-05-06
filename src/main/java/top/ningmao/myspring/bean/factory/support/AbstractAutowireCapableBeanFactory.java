@@ -4,6 +4,8 @@ import top.ningmao.myspring.bean.BeansException;
 import cn.hutool.core.bean.BeanUtil;
 import top.ningmao.myspring.bean.PropertyValue;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
+import top.ningmao.myspring.bean.factory.config.BeanReference;
+
 /**
  * 
  *
@@ -46,7 +48,11 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
             for (PropertyValue propertyValue : beanDefinition.getPropertyValues().getPropertyValues()) {
                 String name = propertyValue.getName();
                 Object value = propertyValue.getValue();
-                
+                if(value instanceof BeanReference){
+                    // beanA 依赖 beanB, 则先获取beanB
+                    BeanReference beanReference = (BeanReference) value;
+                    value = getBean(beanReference.getBeanName());
+                }
                 //通过反射设置属性
                 BeanUtil.setFieldValue(bean, name, value);
             }
