@@ -3,6 +3,7 @@ package top.ningmao.myspring.bean.factory.support;
 import top.ningmao.myspring.bean.BeansException;
 import top.ningmao.myspring.bean.factory.BeanFactory;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
+import top.ningmao.myspring.bean.factory.config.ConfigurableBeanFactory;
 
 /**
  *  抽象的bean工厂
@@ -10,7 +11,7 @@ import top.ningmao.myspring.bean.factory.config.BeanDefinition;
  * @author ningmao
  * @since 2025-4-29
  */
-public abstract class AbstraceBeanFactory extends DefaultSingletonBeanRegistry implements BeanFactory {
+public abstract class AbstraceBeanFactory extends DefaultSingletonBeanRegistry implements  ConfigurableBeanFactory{
     @Override
     public Object getBean(String name)throws BeansException{
         Object bean = getSingleton(name);

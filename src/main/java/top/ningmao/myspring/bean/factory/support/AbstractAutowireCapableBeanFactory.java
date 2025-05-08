@@ -3,6 +3,7 @@ package top.ningmao.myspring.bean.factory.support;
 import top.ningmao.myspring.bean.BeansException;
 import cn.hutool.core.bean.BeanUtil;
 import top.ningmao.myspring.bean.PropertyValue;
+import top.ningmao.myspring.bean.factory.config.AutowrieCapableBeanFactory;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
 import top.ningmao.myspring.bean.factory.config.BeanReference;
 
@@ -12,7 +13,7 @@ import top.ningmao.myspring.bean.factory.config.BeanReference;
  * @author ningmao
  * @since 2025-4-29
  */
-public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFactory{
+public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFactory implements AutowrieCapableBeanFactory {
     
     private InstantiationStrategy instantiationStrategy =  new SimpleInstantiationStrategy();
     

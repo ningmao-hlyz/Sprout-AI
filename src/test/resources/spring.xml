@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- XML 声明，指定版本和编码方式 -->
+
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="
+         http://www.springframework.org/schema/beans
+         http://www.springframework.org/schema/beans/spring-beans.xsd
+         http://www.springframework.org/schema/context
+         http://www.springframework.org/schema/context/spring-context-4.0.xsd">
+
+    <!--
+      根标签 <beans> 是 Spring 配置的核心容器标签
+      - xmlns：声明当前 XML 文件使用的命名空间，主要是 beans 标签的含义
+      - xmlns:xsi：用于支持 schema 验证（即 XML 格式校验）
+      - xmlns:context：引入 Spring context 命名空间（如启用注解扫描时会用到）
+      - xsi:schemaLocation：指定上面这些命名空间的对应的 XSD 文件（用于约束 XML 写法）
+    -->
+
+    <!-- 定义一个名为 "person" 的 Bean，类是 org.springframework.test.ioc.bean.Person -->
+    <bean id="person" class="top.ningmao.myspring.bean.Person">
+        <!-- 为 person 的 name 属性赋值为字符串 "derek" -->
+        <property name="name" value="derek"/>
+
+        <!-- 为 person 的 car 属性注入另一个名为 "car" 的 Bean -->
+        <property name="car" ref="car"/>
+    </bean>
+
+    <!-- 定义另一个 Bean，id 为 "car"，类是 org.springframework.test.ioc.bean.Car -->
+    <bean id="car" class="top.ningmao.myspring.bean.Car">
+        <!-- 为 car 的 brand 属性赋值为字符串 "porsche" -->
+        <property name="brand" value="porsche"/>
+    </bean>
+
+</beans>
