@@ -27,6 +27,11 @@ public abstract class AbstraceBeanFactory extends DefaultSingletonBeanRegistry i
         BeanDefinition beanDefinition = getBeanDefinition(name);
         return createBean(name,beanDefinition);
     }
+    
+    @Override
+    public <T> T getBean(String name, Class<T> requiredType) throws org.springframework.beans.BeansException {
+        return ((T) getBean(name));
+    }
     protected abstract BeanDefinition getBeanDefinition(String beanName)throws BeansException;
     protected abstract Object createBean(String bean,BeanDefinition beanDefinition);
     

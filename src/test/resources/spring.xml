@@ -33,4 +33,7 @@
         <property name="brand" value="porsche"/>
     </bean>
 
+    <bean class="top.ningmao.myspring.common.CustomBeanFactoryPostProcessor"/>
+
+    <bean class="top.ningmao.myspring.common.CustomerBeanPostProcessor"/>
 </beans>
