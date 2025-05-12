@@ -1,9 +1,14 @@
 package top.ningmao.myspring.bean.factory.support;
 
+import cn.hutool.core.util.ClassUtil;
+import cn.hutool.core.util.StrUtil;
 import top.ningmao.myspring.bean.BeansException;
 import cn.hutool.core.bean.BeanUtil;
 import top.ningmao.myspring.bean.PropertyValue;
+import top.ningmao.myspring.bean.factory.InitializingBean;
 import top.ningmao.myspring.bean.factory.config.*;
+
+import java.lang.reflect.Method;
 
 /**
  * 
@@ -33,6 +38,9 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
         } catch (Exception e) {
             throw new BeansException("Instantiation of bean failed", e);
         }
+        
+        //注册有销毁方法的bean
+        registerDisposableBeanIfNecessary(beanName, bean, beanDefinition);
         
         addSingleton(beanName, bean);
         return bean;
@@ -77,8 +85,11 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
         //执行BeanPostProcessor的前置处理
         Object wrappedBean = applyBeanPostProcessorsBeforeInitialization(bean, beanName);
         
-        //TODO 后面会在此处执行bean的初始化方法
-        invokeInitMethods(beanName, wrappedBean, beanDefinition);
+        try {
+            invokeInitMethods(beanName, wrappedBean, beanDefinition);
+        } catch (Exception e) {
+            throw new BeansException("Invocation of init method of bean[" + beanName + "] failed", e);
+        }
         
         //执行BeanPostProcessor的后置处理
         wrappedBean = applyBeanPostProcessorsAfterInitialization(bean, beanName);
@@ -122,9 +133,18 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
      * @param beanDefinition
      * @throws Throwable
      */
-    protected void invokeInitMethods(String beanName, Object bean, BeanDefinition beanDefinition) {
-        //TODO 后面会实现
-        System.out.println("执行bean[" + beanName + "]的初始化方法");
+    protected void invokeInitMethods(String beanName, Object bean, BeanDefinition beanDefinition) throws Exception {
+        if(bean instanceof InitializingBean){
+            ((InitializingBean) bean).afterPropertiesSet();
+        }
+        String initMethodName = beanDefinition.getInitMethodName();
+        if (StrUtil.isNotEmpty(initMethodName) && !(bean instanceof org.springframework.beans.factory.InitializingBean && "afterPropertiesSet".equals(initMethodName))) {
+            Method initMethod = ClassUtil.getPublicMethod(beanDefinition.getBeanClass(), initMethodName);
+            if (initMethod == null) {
+                throw new BeansException("Could not find an init method named '" + initMethodName + "' on bean with name '" + beanName + "'");
+            }
+            initMethod.invoke(bean);
+        }
     }
     
     public InstantiationStrategy getInstantiationStrategy() {
