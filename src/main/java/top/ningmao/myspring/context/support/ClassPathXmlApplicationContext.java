@@ -3,7 +3,6 @@ package top.ningmao.myspring.context.support;
 
 import top.ningmao.myspring.bean.BeansException;
 
-import java.util.Map;
 
 public class ClassPathXmlApplicationContext extends AbstractXmlApplicationContext{
    

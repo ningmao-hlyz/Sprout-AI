@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import top.ningmao.myspring.bean.BeansException;
 import cn.hutool.core.bean.BeanUtil;
 import top.ningmao.myspring.bean.PropertyValue;
+import top.ningmao.myspring.bean.factory.BeanFactoryAware;
 import top.ningmao.myspring.bean.factory.InitializingBean;
 import top.ningmao.myspring.bean.factory.config.*;
 
@@ -27,7 +28,6 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
     }
     
     protected Object doCreateBean(String beanName, BeanDefinition beanDefinition) {
-        Class beanClass = beanDefinition.getBeanClass();
         Object bean = null;
         try {
             bean = createBeanInstance(beanDefinition);
@@ -42,7 +42,9 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
         //注册有销毁方法的bean
         registerDisposableBeanIfNecessary(beanName, bean, beanDefinition);
         
-        addSingleton(beanName, bean);
+        if (beanDefinition.isSingleton()) {
+            addSingleton(beanName, bean);
+        }
         return bean;
     }
     
@@ -82,6 +84,10 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
     
     
     protected Object initializeBean(String beanName, Object bean, BeanDefinition beanDefinition) {
+        if (bean instanceof BeanFactoryAware) {
+            ((BeanFactoryAware) bean).setBeanFactory(this);
+        }
+        
         //执行BeanPostProcessor的前置处理
         Object wrappedBean = applyBeanPostProcessorsBeforeInitialization(bean, beanName);
         
@@ -98,7 +104,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
     
     @Override
     public Object applyBeanPostProcessorsBeforeInitialization(Object existingBean, String beanName)
-            throws org.springframework.beans.BeansException {
+            throws BeansException {
         Object result = existingBean;
         for (BeanPostProcessor processor : getBeanPostProcessors()) {
             Object current = processor.postProcessBeforeInitialization(result, beanName);

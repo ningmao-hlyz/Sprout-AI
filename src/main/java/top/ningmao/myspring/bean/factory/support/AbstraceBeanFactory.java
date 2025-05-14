@@ -29,7 +29,7 @@ public abstract class AbstraceBeanFactory extends DefaultSingletonBeanRegistry i
     }
     
     @Override
-    public <T> T getBean(String name, Class<T> requiredType) throws org.springframework.beans.BeansException {
+    public <T> T getBean(String name, Class<T> requiredType) throws BeansException {
         return ((T) getBean(name));
     }
     protected abstract BeanDefinition getBeanDefinition(String beanName)throws BeansException;

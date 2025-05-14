@@ -7,7 +7,7 @@ import top.ningmao.myspring.context.support.ClassPathXmlApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class ApplicationContext {
+public class ApplicationContextTest {
     
     @Test
     public void testApplicationContext() throws Exception {

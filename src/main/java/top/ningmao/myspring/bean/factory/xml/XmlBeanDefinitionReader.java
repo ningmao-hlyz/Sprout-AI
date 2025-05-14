@@ -34,6 +34,7 @@ public class XmlBeanDefinitionReader extends AbstractBeanDefinitionReader {
     public static final String REF_ATTRIBUTE = "ref";
     public static final String INIT_METHOD_ATTRIBUTE = "init-method";
     public static final String DESTROY_METHOD_ATTRIBUTE = "destroy-method";
+    public static final String SCOPE_ATTRIBUTE = "scope";
     
     public XmlBeanDefinitionReader(BeanDefinitionRegistry registry) {
         super(registry);
@@ -96,7 +97,7 @@ public class XmlBeanDefinitionReader extends AbstractBeanDefinitionReader {
                     String className = bean.getAttribute(CLASS_ATTRIBUTE); // bean 的全类名 class
                     String initMethodName = bean.getAttribute(INIT_METHOD_ATTRIBUTE);
                     String destroyMethodName = bean.getAttribute(DESTROY_METHOD_ATTRIBUTE);
-                    
+                    String beanScope = bean.getAttribute(SCOPE_ATTRIBUTE);
                     // 通过反射获取 Class 对象
                     Class<?> clazz = null;
                     try {
@@ -116,6 +117,10 @@ public class XmlBeanDefinitionReader extends AbstractBeanDefinitionReader {
                     BeanDefinition beanDefinition = new BeanDefinition(clazz);
                     beanDefinition.setInitMethodName(initMethodName);
                     beanDefinition.setDestroyMethodName(destroyMethodName);
+                    if (StrUtil.isNotEmpty(beanScope)) {
+                        beanDefinition.setScope(beanScope);
+                    }
+                    
                     
                     // 处理 <bean> 标签内部的 <property> 子标签
                     for (int j = 0; j < bean.getChildNodes().getLength(); j++) {

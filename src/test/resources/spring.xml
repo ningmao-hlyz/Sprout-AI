@@ -18,22 +18,18 @@
       - xsi:schemaLocation：指定上面这些命名空间的对应的 XSD 文件（用于约束 XML 写法）
     -->
 
-    <!-- 定义一个名为 "person" 的 Bean，类是 org.springframework.test.ioc.bean.Person -->
     <bean id="person" class="top.ningmao.myspring.bean.Person">
-        <!-- 为 person 的 name 属性赋值为字符串 "derek" -->
         <property name="name" value="derek"/>
-
-        <!-- 为 person 的 car 属性注入另一个名为 "car" 的 Bean -->
         <property name="car" ref="car"/>
     </bean>
 
-    <!-- 定义另一个 Bean，id 为 "car"，类是 org.springframework.test.ioc.bean.Car -->
     <bean id="car" class="top.ningmao.myspring.bean.Car">
-        <!-- 为 car 的 brand 属性赋值为字符串 "porsche" -->
         <property name="brand" value="porsche"/>
     </bean>
 
     <bean class="top.ningmao.myspring.common.CustomBeanFactoryPostProcessor"/>
 
     <bean class="top.ningmao.myspring.common.CustomerBeanPostProcessor"/>
+
+    <bean id="helloService" class="top.ningmao.myspring.service.HelloService"/>
 </beans>
