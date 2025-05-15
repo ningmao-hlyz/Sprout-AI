@@ -1,12 +1,15 @@
 package top.ningmao.myspring.bean.factory.support;
 
 import top.ningmao.myspring.bean.BeansException;
+import top.ningmao.myspring.bean.factory.FactoryBean;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
 import top.ningmao.myspring.bean.factory.config.BeanPostProcessor;
 import top.ningmao.myspring.bean.factory.config.ConfigurableBeanFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  *  抽象的bean工厂
@@ -15,18 +18,55 @@ import java.util.List;
  * @since 2025-4-29
  */
 public abstract class AbstraceBeanFactory extends DefaultSingletonBeanRegistry implements  ConfigurableBeanFactory{
+    
     private final List<BeanPostProcessor> beanPostProcessors = new ArrayList<>();
-   
+    
+    private final Map<String, Object> factoryBeanObjectCache = new HashMap<>();
+    
     @Override
-    public Object getBean(String name)throws BeansException{
-        Object bean = getSingleton(name);
-        if(bean != null){
-            return bean;
+    public Object getBean(String name) throws BeansException {
+        Object sharedInstance = getSingleton(name);
+        if (sharedInstance != null) {
+            //如果是FactoryBean，从FactoryBean#getObject中创建bean
+            return getObjectForBeanInstance(sharedInstance, name);
         }
         
-        BeanDefinition beanDefinition = getBeanDefinition(name);
-        return createBean(name,beanDefinition);
+       BeanDefinition beanDefinition = getBeanDefinition(name);
+        Object bean = createBean(name, beanDefinition);
+        return getObjectForBeanInstance(bean, name);
     }
+    /**
+     * 如果是FactoryBean，从FactoryBean#getObject中创建bean
+     *
+     * @param beanInstance
+     * @param beanName
+     * @return
+     */
+    protected Object getObjectForBeanInstance(Object beanInstance, String beanName) {
+        Object object = beanInstance;
+        if (beanInstance instanceof FactoryBean) {
+            FactoryBean factoryBean = (FactoryBean) beanInstance;
+            try {
+                if (factoryBean.isSingleton()) {
+                    //singleton作用域bean，从缓存中获取
+                    object = this.factoryBeanObjectCache.get(beanName);
+                    if (object == null) {
+                        object = factoryBean.getObject();
+                        this.factoryBeanObjectCache.put(beanName, object);
+                    }
+                } else {
+                    //prototype作用域bean，新创建bean
+                    object = factoryBean.getObject();
+                }
+            } catch (Exception ex) {
+                throw new BeansException("FactoryBean threw exception on object[" + beanName + "] creation", ex);
+            }
+        }
+        
+        return object;
+    }
+    
+    
     
     @Override
     public <T> T getBean(String name, Class<T> requiredType) throws BeansException {
