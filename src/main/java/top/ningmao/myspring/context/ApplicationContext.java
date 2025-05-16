@@ -10,5 +10,5 @@ import top.ningmao.myspring.core.io.ResourceLoader;
  * @author ningmao
  * @since 2025-5-10
  */
-public interface ApplicationContext extends ListableBeanFactory , HierarchicalBeanFactory, ResourceLoader {
+public interface ApplicationContext extends ListableBeanFactory , HierarchicalBeanFactory, ResourceLoader, ApplicationEventPublisher {
 }
