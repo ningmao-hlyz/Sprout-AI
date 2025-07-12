@@ -14,11 +14,11 @@ import java.lang.reflect.Method;
  */
 public class ReflectiveMethodInvocation implements MethodInvocation {
 
-    private final Object target;      // 被调用的目标对象
+    protected final Object target;      // 被调用的目标对象
 
-    private final Method method;      // 被调用的方法
+    protected final Method method;      // 被调用的方法
 
-    private final Object[] arguments; // 方法参数
+    protected final Object[] arguments; // 方法参数
 
     public ReflectiveMethodInvocation(Object target, Method method, Object[] arguments) {
         this.target = target;
