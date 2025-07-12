@@ -13,7 +13,9 @@ import java.lang.reflect.Proxy;
  *
  * @author NingMao
  * @since 2025-06-28
- */public class JdkDynamicAopProxy implements AopProxy, InvocationHandler {
+ */
+
+public class JdkDynamicAopProxy implements AopProxy, InvocationHandler {
 
     private final AdvisedSupport advised;
 

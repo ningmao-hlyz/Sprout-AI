@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import top.ningmao.myspring.aop.aspectj.AspectJExpressionPointcut;
 import top.ningmao.myspring.aop.framework.CglibAopProxy;
 import top.ningmao.myspring.aop.framework.JdkDynamicAopProxy;
+import top.ningmao.myspring.aop.framework.ProxyFactory;
 import top.ningmao.myspring.common.WorldServiceInterceptor;
 import top.ningmao.myspring.service.WorldService;
 import top.ningmao.myspring.service.WorldServiceImpl;
@@ -62,6 +63,19 @@ public class DynamicProxyTest {
      */@Test
     public void testCglibDynamicProxy() throws Exception {
         WorldService proxy = (WorldService) new CglibAopProxy(advisedSupport).getProxy();
+        proxy.explode();
+    }
+
+    @Test
+    public void testProxyFactory() throws Exception {
+        // 使用JDK动态代理
+        advisedSupport.setProxyTargetClass(false);
+        WorldService proxy = (WorldService) new ProxyFactory(advisedSupport).getProxy();
+        proxy.explode();
+
+        // 使用CGLIB动态代理
+        advisedSupport.setProxyTargetClass(true);
+        proxy = (WorldService) new ProxyFactory(advisedSupport).getProxy();
         proxy.explode();
     }
 }
