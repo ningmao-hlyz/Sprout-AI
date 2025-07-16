@@ -3,6 +3,7 @@ package top.ningmao.myspring.aop.framework.adapter;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import top.ningmao.myspring.aop.AfterReturningAdvice;
+import top.ningmao.myspring.aop.MethodAfterReturningAdvice;
 
 /**
  * MethodAfterReturningAdvice
@@ -12,16 +13,16 @@ import top.ningmao.myspring.aop.AfterReturningAdvice;
  */
 public class MethodAfterReturningAdviceInterceptor implements MethodInterceptor {
 
-    private AfterReturningAdvice advice;
+    private MethodAfterReturningAdvice advice;
 
     public MethodAfterReturningAdviceInterceptor() {
     }
 
-    public MethodAfterReturningAdviceInterceptor(AfterReturningAdvice advice) {
+    public MethodAfterReturningAdviceInterceptor(MethodAfterReturningAdvice advice) {
         this.advice = advice;
     }
 
-    public void setAdvice(AfterReturningAdvice advice) {
+    public void setAdvice(MethodAfterReturningAdvice advice) {
         this.advice = advice;
     }
 

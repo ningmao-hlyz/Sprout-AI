@@ -31,15 +31,15 @@ public class CombineAdviceInterceptor implements MethodInterceptor {
         this.throwsAdviceInterceptor = throwsAdviceInterceptor;
         this.aroundAdviceInterceptor = aroundAdviceInterceptor;
     }
-    public void setBeforeAdvice(MethodBeforeAdviceInterceptor beforeAdviceInterceptor) {
+    public void setBeforeAdviceInterceptor(MethodBeforeAdviceInterceptor beforeAdviceInterceptor) {
         this.beforeAdviceInterceptor = beforeAdviceInterceptor;
     }
 
-    public void setAfterAdvice(MethodAfterAdviceInterceptor afterAdviceInterceptor) {
+    public void setAfterAdviceInterceptor(MethodAfterAdviceInterceptor afterAdviceInterceptor) {
         this.afterAdviceInterceptor = afterAdviceInterceptor;
     }
 
-    public void setAfterReturningAdvice(MethodAfterReturningAdviceInterceptor afterReturningAdviceInterceptor) {
+    public void setAfterReturningAdviceInterceptor(MethodAfterReturningAdviceInterceptor afterReturningAdviceInterceptor) {
         this.afterReturningAdviceInterceptor = afterReturningAdviceInterceptor;
     }
 
@@ -47,13 +47,12 @@ public class CombineAdviceInterceptor implements MethodInterceptor {
         this.throwsAdviceInterceptor = throwsAdviceInterceptor;
     }
 
-    public void setAroundAdvice(MethodAroundAdviceInterceptor aroundAdviceInterceptor) { // 更改参数类型
+    public void setAroundAdviceInterceptor(MethodAroundAdviceInterceptor aroundAdviceInterceptor) { // 更改参数类型
         this.aroundAdviceInterceptor = aroundAdviceInterceptor;
     }
     public Object invoke(MethodInvocation invocation) throws Throwable {
         // 如果配置了环绕通知，则优先执行环绕通知
         if (aroundAdviceInterceptor != null) {
-            // 环绕通知会通过 invocation.proceed() 来触发后续的通知链或目标方法执行
             return aroundAdviceInterceptor.invoke(invocation);
         }
 
@@ -66,19 +65,14 @@ public class CombineAdviceInterceptor implements MethodInterceptor {
                 beforeAdviceInterceptor.invoke(invocation);
             }
 
-            // 执行目标方法的核心逻辑，并获取结果
             result = invocation.proceed();
 
-        } catch (Exception throwable) { // 捕获目标方法执行过程中抛出的所有 Exception（及子类）
+        } catch (Throwable throwable) {
             // 异常通知：如果配置了 ThrowsAdvice，则在捕获到异常后调用其 throwsHandle 方法
-            // 注意：这里捕获的是 Exception，如果 ThrowsAdvice 需要处理 Throwable，
-            // 则需要将 catch (Exception throwable) 改为 catch (Throwable throwable)
             if (throwsAdviceInterceptor != null) {
                 // 将捕获到的异常、方法、参数和目标对象传递给异常通知处理器
                 throwsAdviceInterceptor.invoke(invocation);
             }
-            // 重新抛出异常，以便调用链上层的处理器也能捕获
-            // 注意：根据 AOP 规范，通常异常通知处理后会重新抛出，除非有特殊业务需求进行抑制
             throw throwable; // 重新抛出异常，确保异常行为传播
         } finally {
             // 后置通知：无论目标方法是否抛出异常，都会在方法执行结束后执行此处的逻辑
@@ -96,6 +90,5 @@ public class CombineAdviceInterceptor implements MethodInterceptor {
         // 返回目标方法的执行结果
         return result;
     }
-
 
 }
