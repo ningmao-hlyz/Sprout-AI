@@ -1,14 +1,13 @@
 package top.ningmao.myspring.aop;
 
-import org.aopalliance.aop.Advice;
 
 import java.lang.reflect.Method;
+
 /**
- * 前置增强
- *
  * @author NingMao
- * @since 2025-07-12
+ * @since 2025-07-16
  */
-public interface BeforeAdvice extends Advice {
+public interface MethodBeforeAdvice extends BeforeAdvice {
+
     void before(Method method, Object[] args, Object target) throws Throwable;
 }

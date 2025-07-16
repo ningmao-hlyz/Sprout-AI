@@ -24,9 +24,39 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
     
     @Override
     protected Object createBean(String beanName, BeanDefinition beanDefinition) throws BeansException {
+        // 如果在实例化前通过后置处理器生成了代理对象，直接返回
+        Object bean = resolveBeforeInstantiation(beanName, beanDefinition);
+        if (bean != null) {
+            return bean;
+        }
         return doCreateBean(beanName, beanDefinition);
     }
-    
+    /**
+     * 调用 InstantiationAwareBeanPostProcessor 的 postProcessBeforeInstantiation
+     * 若返回非 null，说明生成了代理对象，后续不再执行常规创建流程
+     */
+    protected Object resolveBeforeInstantiation(String beanName, BeanDefinition beanDefinition) {
+        Object bean = applyBeanPostProcessorsBeforeInstantiation(beanDefinition.getBeanClass(), beanName);
+        if (bean != null) {
+            bean = applyBeanPostProcessorsAfterInitialization(bean, beanName);
+        }
+        return bean;
+    }
+    /**
+     * 执行所有 InstantiationAwareBeanPostProcessor 的 postProcessBeforeInstantiation 方法
+     */
+    protected Object applyBeanPostProcessorsBeforeInstantiation(Class beanClass, String beanName) {
+        for (BeanPostProcessor beanPostProcessor : getBeanPostProcessors()) {
+            if (beanPostProcessor instanceof InstantiationAwareBeanPostProcessor) {
+                Object result = ((InstantiationAwareBeanPostProcessor) beanPostProcessor)
+                        .postProcessBeforeInstantiation(beanClass, beanName);
+                if (result != null) {
+                    return result; // 生成了代理
+                }
+            }
+        }
+        return null;
+    }
     protected Object doCreateBean(String beanName, BeanDefinition beanDefinition) {
         Object bean = null;
         try {

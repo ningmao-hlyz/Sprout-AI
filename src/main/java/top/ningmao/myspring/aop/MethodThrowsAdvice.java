@@ -1,16 +1,11 @@
 package top.ningmao.myspring.aop;
 
-import org.aopalliance.aop.Advice;
-
 import java.lang.reflect.Method;
 
 /**
- * 抛出异常通知
- *
  * @author NingMao
- * @since 2025-07-12
+ * @since 2025-07-16
  */
-public interface ThrowsAdvice extends Advice {
+public interface MethodThrowsAdvice extends ThrowsAdvice{
     void throwsHandle(Throwable throwable, Method method, Object[] args, Object target);
-
 }

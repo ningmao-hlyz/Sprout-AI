@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+             http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context-4.0.xsd">
+
+    <bean id="worldService" class="top.ningmao.myspring.service.WorldServiceImpl"/>
+
+    <!-- 自动代理创建器 -->
+    <bean class="top.ningmao.myspring.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator"/>
+
+    <!-- 通知器（定义切点 + 通知） -->
+    <bean id="pointcutAdvisor" class="top.ningmao.myspring.aop.aspectj.AspectJExpressionPointcutAdvisor">
+        <property name="expression" value="execution(* top.ningmao.myspring.service.WorldService.explode(..))"/>
+        <property name="advice" ref="combineAdviceInterceptor"/>
+    </bean>
+
+    <!-- 通知适配器集合（将 advice 封装为 MethodInterceptor） -->
+    <bean id="combineAdviceInterceptor" class="top.ningmao.myspring.aop.CombineAdviceInterceptor">
+        <property name="beforeAdviceInterceptor" ref="methodBeforeAdviceInterceptor"/>
+        <property name="afterAdviceInterceptor" ref="methodAfterAdviceInterceptor"/>
+        <property name="afterReturningAdviceInterceptor" ref="methodAfterReturningAdviceInterceptor"/>
+        <property name="throwsAdviceInterceptor" ref="methodThrowsAdviceInterceptor"/>
+        <property name="aroundAdviceInterceptor" ref="methodAroundAdviceInterceptor"/>
+    </bean>
+
+    <!-- 各类通知及其适配器 -->
+    <bean id="methodBeforeAdviceInterceptor" class="top.ningmao.myspring.aop.framework.adapter.MethodBeforeAdviceInterceptor">
+        <property name="advice" ref="beforeAdvice"/>
+    </bean>
+    <bean id="beforeAdvice" class="top.ningmao.myspring.common.WorldServiceBeforeAdvice"/>
+
+    <bean id="methodAfterAdviceInterceptor" class="top.ningmao.myspring.aop.framework.adapter.MethodAfterAdviceInterceptor">
+        <property name="advice" ref="afterAdvice"/>
+    </bean>
+    <bean id="afterAdvice" class="top.ningmao.myspring.common.WorldServiceAfterAdvice"/>
+
+    <bean id="methodAfterReturningAdviceInterceptor" class="top.ningmao.myspring.aop.framework.adapter.MethodAfterReturningAdviceInterceptor">
+        <property name="advice" ref="afterReturningAdvice"/>
+    </bean>
+    <bean id="afterReturningAdvice" class="top.ningmao.myspring.common.WorldServiceAfterReturningAdvice"/>
+
+    <bean id="methodThrowsAdviceInterceptor" class="top.ningmao.myspring.aop.framework.adapter.MethodThrowsAdviceInterceptor">
+        <property name="advice" ref="throwsAdvice"/>
+    </bean>
+    <bean id="throwsAdvice" class="top.ningmao.myspring.common.WorldServiceThrowsAdvice"/>
+
+    <bean id="methodAroundAdviceInterceptor" class="top.ningmao.myspring.aop.framework.adapter.MethodAroundAdviceInterceptor">
+        <property name="advice" ref="aroundAdvice"/>
+    </bean>
+    <bean id="aroundAdvice" class="top.ningmao.myspring.common.WorldServiceAroundAdvice"/>
+
+
+</beans>

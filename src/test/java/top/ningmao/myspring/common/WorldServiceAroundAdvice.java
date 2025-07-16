@@ -2,12 +2,13 @@ package top.ningmao.myspring.common;
 
 import org.aopalliance.intercept.MethodInvocation;
 import top.ningmao.myspring.aop.AroundAdvice;
+import top.ningmao.myspring.aop.MethodAroundAdvice;
 
 /**
  * @author NingMao
  * @since 2025-07-12
  */
-public class WorldServiceAroundAdvice implements AroundAdvice {
+public class WorldServiceAroundAdvice implements MethodAroundAdvice {
     @Override
     public Object around(MethodInvocation invocation) throws Throwable {
         System.out.println("--- 环绕通知：方法执行前操作 ---");
