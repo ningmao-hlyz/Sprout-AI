@@ -1,4 +1,6 @@
 package top.ningmao.myspring.bean;
+
+
 /**
  * 车类
  *

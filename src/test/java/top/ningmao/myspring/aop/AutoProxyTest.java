@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import top.ningmao.myspring.context.support.ClassPathXmlApplicationContext;
 import top.ningmao.myspring.service.WorldService;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 /**
  * @author NingMao
  * @since 2025-07-16
@@ -18,7 +20,7 @@ public class AutoProxyTest {
         // 因为有环绕通知，所以是走到环绕通知，其余的可以自行测试（例如删掉配置aroundAdviceInterceptor）
         worldService.explode();
         WorldService worldServiceWithException = applicationContext.getBean("worldServiceWithException", WorldService.class);
-        worldServiceWithException.explode();
+        assertThrows(RuntimeException.class, worldServiceWithException::explode);
     }
 
 }
