@@ -34,5 +34,6 @@ public interface ConfigurableListableBeanFactory extends ListableBeanFactory, Au
     
     @Override
     void addBeanPostProcessor(BeanPostProcessor beanPostProcessor);
-    
+
+    String resolveEmbeddedValue(String value);
 }

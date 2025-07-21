@@ -8,6 +8,7 @@ import top.ningmao.myspring.bean.factory.config.BeanDefinition;
 import top.ningmao.myspring.bean.factory.config.BeanFactoryPostProcessor;
 import top.ningmao.myspring.core.io.DefaultResourceLoader;
 import top.ningmao.myspring.core.io.Resource;
+import top.ningmao.myspring.util.StringValueResolver;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -173,5 +174,18 @@ public class PropertyPlaceholderConfigurer implements BeanFactoryPostProcessor {
 
     public void setLocation(String location) {
         this.location = location;
+    }
+
+    private class PlaceholderResolvingStringValueResolver implements StringValueResolver {
+
+        private final Properties properties;
+
+        public PlaceholderResolvingStringValueResolver(Properties properties) {
+            this.properties = properties;
+        }
+
+        public String resolveStringValue(String strVal) throws BeansException {
+            return PropertyPlaceholderConfigurer.this.parseStringValue(strVal, this.properties);
+        }
     }
 }

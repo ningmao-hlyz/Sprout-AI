@@ -1,5 +1,6 @@
 package top.ningmao.myspring.bean.factory.support;
 
+import org.springframework.util.StringValueResolver;
 import top.ningmao.myspring.bean.BeansException;
 import top.ningmao.myspring.bean.factory.FactoryBean;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
@@ -22,7 +23,10 @@ public abstract class AbstraceBeanFactory extends DefaultSingletonBeanRegistry i
     private final List<BeanPostProcessor> beanPostProcessors = new ArrayList<>();
     
     private final Map<String, Object> factoryBeanObjectCache = new HashMap<>();
-    
+
+    private final List<StringValueResolver> embeddedValueResolvers = new ArrayList<StringValueResolver>();
+
+
     @Override
     public Object getBean(String name) throws BeansException {
         Object sharedInstance = getSingleton(name);
@@ -65,9 +69,7 @@ public abstract class AbstraceBeanFactory extends DefaultSingletonBeanRegistry i
         
         return object;
     }
-    
-    
-    
+
     @Override
     public <T> T getBean(String name, Class<T> requiredType) throws BeansException {
         return ((T) getBean(name));
@@ -85,5 +87,16 @@ public abstract class AbstraceBeanFactory extends DefaultSingletonBeanRegistry i
     
     public List<BeanPostProcessor> getBeanPostProcessors() {
         return this.beanPostProcessors;
+    }
+
+    public void addEmbeddedValueResolver(StringValueResolver valueResolver) {
+        this.embeddedValueResolvers.add(valueResolver);
+    }
+    public String resolveEmbeddedValue(String value) {
+        String result = value;
+        for (StringValueResolver resolver : this.embeddedValueResolvers) {
+            result = resolver.resolveStringValue(result);
+        }
+        return result;
     }
 }

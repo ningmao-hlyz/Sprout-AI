@@ -7,6 +7,7 @@ import top.ningmao.myspring.aop.*;
 import top.ningmao.myspring.aop.aspectj.AspectJExpressionPointcutAdvisor;
 import top.ningmao.myspring.aop.framework.ProxyFactory;
 import top.ningmao.myspring.bean.BeansException;
+import top.ningmao.myspring.bean.PropertyValues;
 import top.ningmao.myspring.bean.factory.BeanFactory;
 import top.ningmao.myspring.bean.factory.BeanFactoryAware;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
@@ -107,5 +108,10 @@ public class DefaultAdvisorAutoProxyCreator implements InstantiationAwareBeanPos
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
         return bean;
+    }
+
+    @Override
+    public PropertyValues postProcessPropertyValues(PropertyValues pvs, Object bean, String beanName) throws BeansException {
+        return pvs;
     }
 }
