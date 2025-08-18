@@ -1,6 +1,7 @@
 package top.ningmao.myspring.bean;
 
 
+import top.ningmao.myspring.bean.factory.annotation.Value;
 import top.ningmao.myspring.stereotype.Component;
 
 /**
@@ -11,7 +12,7 @@ import top.ningmao.myspring.stereotype.Component;
  */
 @Component
 public class Car {
-    
+    @Value("${brand}")
     private String brand;
     
     public String getBrand() {

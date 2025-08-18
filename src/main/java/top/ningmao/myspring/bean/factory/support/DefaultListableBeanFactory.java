@@ -25,7 +25,24 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
         
         return beanDefinition;
     }
-    
+
+    @Override
+    public <T> T getBean(Class<T> requiredType) throws BeansException {
+        List<String> beanNames = new ArrayList<>();
+        for (Map.Entry<String, BeanDefinition> entry : beanDefinitionMap.entrySet()) {
+            Class beanClass = entry.getValue().getBeanClass();
+            if (requiredType.isAssignableFrom(beanClass)) {
+                beanNames.add(entry.getKey());
+            }
+        }
+        if (beanNames.size() == 1) {
+            return getBean(beanNames.get(0), requiredType);
+        }
+
+        throw new BeansException(requiredType + "expected single bean but found " +
+                beanNames.size() + ": " + beanNames);
+    }
+
     @Override
     public boolean containsBeanDefinition(String beanName) {
         return beanDefinitionMap.containsKey(beanName);

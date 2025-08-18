@@ -3,6 +3,9 @@ package top.ningmao.myspring.bean;
 
 import top.ningmao.myspring.bean.factory.DisposableBean;
 import top.ningmao.myspring.bean.factory.InitializingBean;
+import top.ningmao.myspring.bean.factory.annotation.Autowired;
+import top.ningmao.myspring.bean.factory.annotation.Qualifier;
+import top.ningmao.myspring.stereotype.Component;
 
 /**
  * Person 类
@@ -10,11 +13,12 @@ import top.ningmao.myspring.bean.factory.InitializingBean;
  * @author ningmao
  * @since 2025-4-30
  */
+@Component
 public class Person implements InitializingBean, DisposableBean {
     private String name;
     
     private int age;
-    
+    @Autowired
     private Car car;
     
     public String getName() {

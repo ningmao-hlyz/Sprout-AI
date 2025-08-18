@@ -7,7 +7,6 @@ import top.ningmao.myspring.stereotype.Component;
  * @author NingMao
  * @since 2025-07-17
  */
-@Component
 public class ServerConfig {
 
     @Value("http://${host}:${port}")

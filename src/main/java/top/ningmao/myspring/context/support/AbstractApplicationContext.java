@@ -82,7 +82,10 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader i
     public <T> Map<String, T> getBeansOfType(Class<T> type) throws org.springframework.beans.BeansException {
         return getBeanFactory().getBeansOfType(type);
     }
-    
+    public <T> T getBean(Class<T> requiredType) throws org.springframework.beans.BeansException {
+        return getBeanFactory().getBean(requiredType);
+    }
+
     /**
      * 初始化事件发布者
      */
