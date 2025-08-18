@@ -16,18 +16,7 @@ public class CglibSubclassingInstantiationStrategy implements InstantiationStrat
     
     @Override
     public Object instantiate(BeanDefinition beanDefinition) throws BeansException {
-        // 1. 创建 CGLIB 的增强器对象（相当于代理工厂）
-        Enhancer enhancer = new Enhancer();
-        
-        // 2. 设置要代理的目标类（即被代理类的“父类”）
-        enhancer.setSuperclass(beanDefinition.getBeanClass());
-        
-        // 3. 设置方法拦截器（这里用 lambda 表达式实现 MethodInterceptor）
-        enhancer.setCallback((MethodInterceptor) (obj, method, argsTemp, proxy) ->
-                proxy.invokeSuper(obj, argsTemp)
-        );
-        
-        // 4. 创建代理对象（即目标类的子类实例）
-        return enhancer.create();
+        //TODO 感兴趣的小伙伴可以实现下
+        throw new UnsupportedOperationException("CGLIB instantiation strategy is not supported");
     }
 }
