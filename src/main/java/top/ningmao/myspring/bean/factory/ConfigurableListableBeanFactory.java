@@ -6,6 +6,7 @@ import top.ningmao.myspring.bean.factory.config.AutowrieCapableBeanFactory;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
 import top.ningmao.myspring.bean.factory.config.BeanPostProcessor;
 import top.ningmao.myspring.bean.factory.config.ConfigurableBeanFactory;
+import top.ningmao.myspring.util.StringValueResolver;
 
 /**
  * @author ningmao
@@ -23,7 +24,9 @@ public interface ConfigurableListableBeanFactory extends ListableBeanFactory, Au
 
      */
     BeanDefinition getBeanDefinition(String beanName) throws BeansException;
-    
+
+    void addEmbeddedValueResolver(StringValueResolver valueResolver);
+
     
     /**
      * 提前实例化所有单例实例

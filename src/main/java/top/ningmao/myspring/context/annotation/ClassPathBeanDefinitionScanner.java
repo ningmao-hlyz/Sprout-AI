@@ -1,6 +1,7 @@
 package top.ningmao.myspring.context.annotation;
 
 import cn.hutool.core.util.StrUtil;
+import top.ningmao.myspring.bean.factory.annotation.AutowiredAnnotationBeanPostProcessor;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
 import top.ningmao.myspring.bean.factory.support.BeanDefinitionRegistry;
 import top.ningmao.myspring.stereotype.Component;
@@ -24,6 +25,7 @@ public class ClassPathBeanDefinitionScanner extends ClassPathScanningCandidateCo
         this.registry = registry;
     }
 
+    public static final String AUTOWIRED_ANNOTATION_PROCESSOR_BEAN_NAME = "top.ningmao.myspring.context.annotation.internalAutowiredAnnotationProcessor";
     /**
      * 扫描指定的包路径，并将所有标注了 @Component 的类注册为 BeanDefinition
      *
@@ -45,6 +47,9 @@ public class ClassPathBeanDefinitionScanner extends ClassPathScanningCandidateCo
                 registry.registerBeanDefinition(beanName, candidate);
             }
         }
+
+        //注册处理@Autowired和@Value注解的BeanPostProcessor
+        registry.registerBeanDefinition(AUTOWIRED_ANNOTATION_PROCESSOR_BEAN_NAME, new BeanDefinition(AutowiredAnnotationBeanPostProcessor.class));
     }
 
     /**

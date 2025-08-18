@@ -2,7 +2,6 @@ package top.ningmao.myspring.expanding;
 
 
 import org.junit.jupiter.api.Test;
-import top.ningmao.myspring.bean.Car;
 import top.ningmao.myspring.bean.ServerConfig;
 import top.ningmao.myspring.context.support.ClassPathXmlApplicationContext;
 

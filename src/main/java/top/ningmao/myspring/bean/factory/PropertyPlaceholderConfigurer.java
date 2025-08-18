@@ -34,6 +34,10 @@ public class PropertyPlaceholderConfigurer implements BeanFactoryPostProcessor {
 
         //属性值替换占位符
         processProperties(beanFactory, properties);
+
+        //往容器中添加字符解析器，供解析@Value注解使用
+        StringValueResolver valueResolver = new PlaceholderResolvingStringValueResolver(properties);
+        beanFactory.addEmbeddedValueResolver(valueResolver);
     }
 
     /**

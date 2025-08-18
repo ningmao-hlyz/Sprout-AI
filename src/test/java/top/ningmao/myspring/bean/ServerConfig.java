@@ -1,6 +1,6 @@
 package top.ningmao.myspring.bean;
 
-import org.springframework.beans.factory.annotation.Value;
+import top.ningmao.myspring.bean.factory.annotation.Value;
 import top.ningmao.myspring.stereotype.Component;
 
 /**
@@ -10,7 +10,7 @@ import top.ningmao.myspring.stereotype.Component;
 @Component
 public class ServerConfig {
 
-    @Value("${host}")
+    @Value("http://${host}:${port}")
     private String url;
 
     @Value("${base.${env}}")

@@ -1,11 +1,11 @@
 package top.ningmao.myspring.bean.factory.support;
 
-import org.springframework.util.StringValueResolver;
 import top.ningmao.myspring.bean.BeansException;
 import top.ningmao.myspring.bean.factory.FactoryBean;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
 import top.ningmao.myspring.bean.factory.config.BeanPostProcessor;
 import top.ningmao.myspring.bean.factory.config.ConfigurableBeanFactory;
+import top.ningmao.myspring.util.StringValueResolver;
 
 import java.util.ArrayList;
 import java.util.HashMap;
