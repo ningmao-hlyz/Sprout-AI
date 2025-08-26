@@ -2,12 +2,14 @@ package top.ningmao.myspring.bean.factory.annotation;
 
 import cn.hutool.core.bean.BeanUtil;
 
+import cn.hutool.core.util.TypeUtil;
 import top.ningmao.myspring.bean.BeansException;
 import top.ningmao.myspring.bean.PropertyValues;
 import top.ningmao.myspring.bean.factory.BeanFactory;
 import top.ningmao.myspring.bean.factory.BeanFactoryAware;
 import top.ningmao.myspring.bean.factory.ConfigurableListableBeanFactory;
 import top.ningmao.myspring.bean.factory.config.InstantiationAwareBeanPostProcessor;
+import top.ningmao.myspring.core.convert.ConversionService;
 
 import java.lang.reflect.Field;
 
@@ -40,12 +42,20 @@ public class AutowiredAnnotationBeanPostProcessor implements InstantiationAwareB
             Value valueAnnotation = field.getAnnotation(Value.class);
             if (valueAnnotation != null) {
                 // 获取注解中的占位符表达式，比如 "${jdbc.username}"
-                String value = valueAnnotation.value();
+                Object value = valueAnnotation.value();
 
                 // 使用 BeanFactory 解析嵌套值（例如替换占位符）
                 // 相当于调用 StringValueResolver.resolveStringValue
-                value = beanFactory.resolveEmbeddedValue(value);
-
+                value = beanFactory.resolveEmbeddedValue((String) value);
+                //类型转换
+                Class<?> sourceType = value.getClass();
+                Class<?> targetType = (Class<?>) TypeUtil.getType(field);
+                ConversionService conversionService = beanFactory.getConversionService();
+                if (conversionService != null) {
+                    if (conversionService.canConvert(sourceType, targetType)) {
+                        value = conversionService.convert(value, targetType);
+                    }
+                }
                 // 使用工具类设置字段值（通过反射将解析后的值注入到字段中）
                 BeanUtil.setFieldValue(bean, field.getName(), value);
             }

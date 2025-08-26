@@ -5,6 +5,7 @@ import top.ningmao.myspring.bean.factory.FactoryBean;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
 import top.ningmao.myspring.bean.factory.config.BeanPostProcessor;
 import top.ningmao.myspring.bean.factory.config.ConfigurableBeanFactory;
+import top.ningmao.myspring.core.convert.ConversionService;
 import top.ningmao.myspring.util.StringValueResolver;
 
 import java.util.ArrayList;
@@ -26,6 +27,7 @@ public abstract class AbstraceBeanFactory extends DefaultSingletonBeanRegistry i
 
     private final List<StringValueResolver> embeddedValueResolvers = new ArrayList<StringValueResolver>();
 
+    private ConversionService conversionService;
 
     @Override
     public Object getBean(String name) throws BeansException {
@@ -98,5 +100,21 @@ public abstract class AbstraceBeanFactory extends DefaultSingletonBeanRegistry i
             result = resolver.resolveStringValue(result);
         }
         return result;
+    }
+    @Override
+    public boolean containsBean(String name) {
+        return containsBeanDefinition(name);
+    }
+
+    protected abstract boolean containsBeanDefinition(String beanName);
+
+    @Override
+    public ConversionService getConversionService() {
+        return conversionService;
+    }
+
+    @Override
+    public void setConversionService(ConversionService conversionService) {
+        this.conversionService = conversionService;
     }
 }

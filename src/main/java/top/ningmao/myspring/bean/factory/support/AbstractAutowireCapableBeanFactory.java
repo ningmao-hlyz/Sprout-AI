@@ -1,14 +1,16 @@
 package top.ningmao.myspring.bean.factory.support;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.ClassUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.core.util.TypeUtil;
 import top.ningmao.myspring.bean.BeansException;
-import cn.hutool.core.bean.BeanUtil;
 import top.ningmao.myspring.bean.PropertyValue;
 import top.ningmao.myspring.bean.PropertyValues;
 import top.ningmao.myspring.bean.factory.BeanFactoryAware;
 import top.ningmao.myspring.bean.factory.InitializingBean;
 import top.ningmao.myspring.bean.factory.config.*;
+import top.ningmao.myspring.core.convert.ConversionService;
 
 import java.lang.reflect.Method;
 
@@ -96,7 +98,18 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
                     // beanA 依赖 beanB, 则先获取beanB
                     BeanReference beanReference = (BeanReference) value;
                     value = getBean(beanReference.getBeanName());
+                }else{
+                    //类型转换
+                    Class<?> sourceType = value.getClass();
+                    Class<?> targetType = (Class<?>) TypeUtil.getFieldType(bean.getClass(), name);
+                    ConversionService conversionService = getConversionService();
+                    if (conversionService != null) {
+                        if (conversionService.canConvert(sourceType, targetType)) {
+                            value = conversionService.convert(value, targetType);
+                        }
+                    }
                 }
+
                 //通过反射设置属性
                 BeanUtil.setFieldValue(bean, name, value);
             }
@@ -104,7 +117,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
             throw new BeansException("Error setting property values for bean: " + beanName, ex);
         }
     }
-    
+
     /**
      * 实例化bean
      *

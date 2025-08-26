@@ -6,6 +6,7 @@ import top.ningmao.myspring.bean.factory.config.AutowrieCapableBeanFactory;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
 import top.ningmao.myspring.bean.factory.config.BeanPostProcessor;
 import top.ningmao.myspring.bean.factory.config.ConfigurableBeanFactory;
+import top.ningmao.myspring.core.convert.ConversionService;
 import top.ningmao.myspring.util.StringValueResolver;
 
 /**
@@ -33,10 +34,14 @@ public interface ConfigurableListableBeanFactory extends ListableBeanFactory, Au
      *
      * @throws BeansException
      */
-    void preInstantiateSingletons() throws org.springframework.beans.BeansException;
+    void preInstantiateSingletons() throws BeansException;
     
     @Override
     void addBeanPostProcessor(BeanPostProcessor beanPostProcessor);
 
     String resolveEmbeddedValue(String value);
+
+    void setConversionService(ConversionService conversionService);
+
+    ConversionService getConversionService();
 }

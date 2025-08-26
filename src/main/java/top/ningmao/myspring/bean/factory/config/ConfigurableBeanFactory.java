@@ -2,6 +2,7 @@ package top.ningmao.myspring.bean.factory.config;
 
 
 import top.ningmao.myspring.bean.factory.HierarchicalBeanFactory;
+import top.ningmao.myspring.core.convert.ConversionService;
 
 /**
  * @author ningmao
@@ -20,5 +21,9 @@ public interface ConfigurableBeanFactory extends HierarchicalBeanFactory, Single
      * 销毁单例bean
      */
     void destroySingletons();
+
+    void setConversionService(ConversionService conversionService);
+
+    ConversionService getConversionService();
 
 }
