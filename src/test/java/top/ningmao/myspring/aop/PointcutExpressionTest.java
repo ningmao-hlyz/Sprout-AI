@@ -17,7 +17,7 @@ public class PointcutExpressionTest {
         /**
          * execution(
          *   返回类型: *,
-         *   类路径: org.springframework.test.service.HelloService,
+         *   类路径: top.ningmao.myspring.service.HelloService,
          *   方法名: *,
          *   参数: (..)
          * )

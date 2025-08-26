@@ -1,10 +1,10 @@
 package top.ningmao.myspring.ioc;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.support.DefaultListableBeanFactory;
-import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
 import top.ningmao.myspring.bean.Car;
 import top.ningmao.myspring.bean.Person;
+import top.ningmao.myspring.bean.factory.support.DefaultListableBeanFactory;
+import top.ningmao.myspring.bean.factory.xml.XmlBeanDefinitionReader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

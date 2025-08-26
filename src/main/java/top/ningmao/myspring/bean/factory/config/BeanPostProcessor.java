@@ -27,9 +27,9 @@ public interface BeanPostProcessor {
      * @param bean
      * @param beanName
      * @return
-     * @throws org.springframework.beans.BeansException
+     * @throws BeansException
      */
-    Object postProcessAfterInitialization(Object bean, String beanName) throws org.springframework.beans.BeansException;
+    Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException;
     
     
 }

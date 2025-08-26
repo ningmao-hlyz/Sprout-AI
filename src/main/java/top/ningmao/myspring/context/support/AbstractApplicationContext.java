@@ -81,10 +81,10 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader i
     protected abstract void refreshBeanFactory() throws BeansException;
     
     @Override
-    public <T> Map<String, T> getBeansOfType(Class<T> type) throws org.springframework.beans.BeansException {
+    public <T> Map<String, T> getBeansOfType(Class<T> type) throws BeansException {
         return getBeanFactory().getBeansOfType(type);
     }
-    public <T> T getBean(Class<T> requiredType) throws org.springframework.beans.BeansException {
+    public <T> T getBean(Class<T> requiredType) throws BeansException {
         return getBeanFactory().getBean(requiredType);
     }
 

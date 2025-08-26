@@ -28,7 +28,7 @@ public class DisposableBeanAdapter implements DisposableBean {
         }
         
         // 避免同时继承了DisposableBean然后又xml指定了有个销毁方法，且都是destroy导致执行两次
-        if (StrUtil.isNotEmpty(destroyMethodName) && !(bean instanceof org.springframework.beans.factory.DisposableBean && "destroy".equals(this.destroyMethodName))) {
+        if (StrUtil.isNotEmpty(destroyMethodName) && !(bean instanceof DisposableBean && "destroy".equals(this.destroyMethodName))) {
             
             // 执行自定义方法
             Method destroyMethod = ClassUtil.getPublicMethod(bean.getClass(),destroyMethodName);

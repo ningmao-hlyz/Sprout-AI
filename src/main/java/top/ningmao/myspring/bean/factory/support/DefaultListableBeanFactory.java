@@ -68,7 +68,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
     }
     
     @Override
-    public void preInstantiateSingletons() throws org.springframework.beans.BeansException {
+    public void preInstantiateSingletons() throws BeansException {
         beanDefinitionMap.forEach((beanName,beanDefinition)->{
             if(beanDefinition.isSingleton()){
                 getBean(beanName);

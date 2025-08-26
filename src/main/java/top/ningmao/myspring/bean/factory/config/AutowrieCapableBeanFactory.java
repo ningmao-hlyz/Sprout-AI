@@ -1,6 +1,6 @@
 package top.ningmao.myspring.bean.factory.config;
 
-import org.springframework.beans.BeansException;
+import top.ningmao.myspring.bean.BeansException;
 import top.ningmao.myspring.bean.factory.BeanFactory;
 /**
  * @author ningmao

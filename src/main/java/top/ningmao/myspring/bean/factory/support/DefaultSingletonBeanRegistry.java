@@ -9,6 +9,7 @@ import top.ningmao.myspring.bean.factory.config.SingletonBeanRegistry;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 默认的添加单例 bean 注册工厂
@@ -19,25 +20,32 @@ import java.util.Map;
 public class DefaultSingletonBeanRegistry implements SingletonBeanRegistry {
     
     private Map<String, Object> singletonObjects = new HashMap<>();
-    
+
+    protected Map<String, Object> earlySingletonObjects = new HashMap<>();
+
+    private final Map<String, DisposableBean> disposableBeans = new HashMap<>();
+
+
     @Override
     public Object getSingleton(String beanName) {
-        return singletonObjects.get(beanName);
+        Object bean = singletonObjects.get(beanName);
+        if (bean == null) {
+            bean = earlySingletonObjects.get(beanName);
+        }
+        return bean;
     }
-    
     @Override
     public void addSingleton(String beanName, Object singletonObject) {
         singletonObjects.put(beanName, singletonObject);
     }
     
-    private final Map<String, DisposableBean> disposableBeans = new HashMap<>();
-    
+
     public void registerDisposableBean(String beanName, DisposableBean bean) {
         disposableBeans.put(beanName, bean);
     }
     
     public void destroySingletons() {
-        ArrayList<String> beanNames = new ArrayList<>(disposableBeans.keySet());
+        Set<String> beanNames = disposableBeans.keySet();
         for (String beanName : beanNames) {
             DisposableBean disposableBean = disposableBeans.remove(beanName);
             try {

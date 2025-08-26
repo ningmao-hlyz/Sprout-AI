@@ -1,7 +1,7 @@
 package top.ningmao.myspring.bean;
 
 
-import org.springframework.beans.factory.annotation.Value;
+import top.ningmao.myspring.bean.factory.annotation.Value;
 import top.ningmao.myspring.stereotype.Component;
 
 import java.time.LocalDate;

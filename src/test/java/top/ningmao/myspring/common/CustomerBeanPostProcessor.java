@@ -1,6 +1,6 @@
 package top.ningmao.myspring.common;
 
-import org.springframework.beans.BeansException;
+import top.ningmao.myspring.bean.BeansException;
 import top.ningmao.myspring.bean.Car;
 import top.ningmao.myspring.bean.factory.config.BeanPostProcessor;
 
