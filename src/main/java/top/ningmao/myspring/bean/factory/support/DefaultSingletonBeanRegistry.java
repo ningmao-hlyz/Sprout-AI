@@ -37,6 +37,7 @@ public class DefaultSingletonBeanRegistry implements SingletonBeanRegistry {
     @Override
     public void addSingleton(String beanName, Object singletonObject) {
         singletonObjects.put(beanName, singletonObject);
+        earlySingletonObjects.remove(beanName);
     }
     
 
