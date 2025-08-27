@@ -15,6 +15,8 @@ import top.ningmao.myspring.bean.factory.config.InstantiationAwareBeanPostProces
 import top.ningmao.myspring.bean.factory.support.DefaultListableBeanFactory;
 
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * 默认的Advisor自动代理创建器
@@ -25,11 +27,22 @@ import java.util.Collection;
 public class DefaultAdvisorAutoProxyCreator implements InstantiationAwareBeanPostProcessor, BeanFactoryAware {
 
     private DefaultListableBeanFactory beanFactory;
-    /**
-     * 在 Bean 实例化之前进行处理（核心 AOP 创建代理逻辑）
-     */
+
+    private Set<Object> earlyProxyReferences = new HashSet<>();
+
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+        if (!earlyProxyReferences.contains(beanName)) {
+            return wrapIfNecessary(bean, beanName);
+        }
+
+        return bean;
+    }
+
+    /**
+     * 核心 AOP 创建代理逻辑
+     */
+    public Object wrapIfNecessary(Object bean, String beanName) throws BeansException {
         // 如果是基础设施类（比如 Advice、Advisor、Pointcut 本身），直接返回，避免给它们再创建代理，防止死循环
         if (isInfrastructureClass(bean.getClass())) {
             return bean;
@@ -111,5 +124,10 @@ public class DefaultAdvisorAutoProxyCreator implements InstantiationAwareBeanPos
     @Override
     public Object postProcessBeforeInstantiation(Class<?> beanClass, String beanName) throws BeansException {
         return null;
+    }
+    @Override
+    public Object getEarlyBeanReference(Object bean, String beanName) throws BeansException {
+        earlyProxyReferences.add(beanName);
+        return wrapIfNecessary(bean, beanName);
     }
 }

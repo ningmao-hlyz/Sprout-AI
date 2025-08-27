@@ -9,6 +9,7 @@ import top.ningmao.myspring.bean.PropertyValue;
 import top.ningmao.myspring.bean.PropertyValues;
 import top.ningmao.myspring.bean.factory.BeanFactoryAware;
 import top.ningmao.myspring.bean.factory.InitializingBean;
+import top.ningmao.myspring.bean.factory.ObjectFactory;
 import top.ningmao.myspring.bean.factory.config.*;
 import top.ningmao.myspring.core.convert.ConversionService;
 
@@ -67,7 +68,13 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
 
             //为解决循环依赖问题，将实例化后的bean放进缓存中提前暴露
             if (beanDefinition.isSingleton()) {
-                earlySingletonObjects.put(beanName, bean);
+                Object finalBean = bean;
+                addSingletonFactory(beanName, new ObjectFactory<Object>() {
+                    @Override
+                    public Object getObject() throws BeansException {
+                        return getEarlyBeanReference(beanName, beanDefinition, finalBean);
+                    }
+                });
             }
 
             //实例化bean之后执行
@@ -88,13 +95,16 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
         
         //注册有销毁方法的bean
         registerDisposableBeanIfNecessary(beanName, bean, beanDefinition);
-        
+
+        Object exposedObject = bean;
         if (beanDefinition.isSingleton()) {
-            addSingleton(beanName, bean);
+            //如果有代理对象，此处获取代理对象
+            exposedObject = getSingleton(beanName);
+            addSingleton(beanName, exposedObject);
         }
-        return bean;
+        return exposedObject;
     }
-    
+
     /**
      * 为bean填充属性
      *
@@ -247,13 +257,49 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFac
             initMethod.invoke(bean);
         }
     }
-    
+
     public InstantiationStrategy getInstantiationStrategy() {
         return instantiationStrategy;
     }
     
     public void setInstantiationStrategy(InstantiationStrategy instantiationStrategy) {
         this.instantiationStrategy = instantiationStrategy;
+    }
+    /**
+     * 在 Spring 解决循环依赖的三级缓存机制中，允许在 bean 尚未完成初始化时
+     * 就提前暴露一个“早期引用”（early reference），通常是一个代理对象。
+     *
+     * - 对于普通单例 bean，直接实例化后放入二级缓存即可。
+     * - 对于需要 AOP 代理的 bean，必须通过 getEarlyBeanReference 提前生成代理，
+     *   否则注入到其他 bean 中的将是“未代理对象”，导致最终和一级缓存中不一致。
+     *
+     * 这个方法就是用来给 bean 提供“早期代理引用”的。
+     */
+    protected Object getEarlyBeanReference(String beanName, BeanDefinition beanDefinition, Object bean) {
+        // 初始情况下，提前暴露的对象就是实例化出来的原始 bean
+        Object exposedObject = bean;
+
+        // 遍历所有 BeanPostProcessor（后置处理器）
+        for (BeanPostProcessor bp : getBeanPostProcessors()) {
+
+            // 只关心 InstantiationAwareBeanPostProcessor 类型
+            // 因为它扩展了处理“实例化前后”的能力
+            if (bp instanceof InstantiationAwareBeanPostProcessor) {
+
+                // 调用其 getEarlyBeanReference 方法
+                // 在这里可能会返回一个代理对象（比如 AOP 代理）
+                exposedObject = ((InstantiationAwareBeanPostProcessor) bp)
+                        .getEarlyBeanReference(exposedObject, beanName);
+
+                // 如果某个后置处理器返回 null，说明不希望暴露该 bean，直接中断返回
+                if (exposedObject == null) {
+                    return exposedObject;
+                }
+            }
+        }
+
+        // 返回最终的“早期引用对象”，可能是原始 bean，也可能是代理对象
+        return exposedObject;
     }
 
 }
