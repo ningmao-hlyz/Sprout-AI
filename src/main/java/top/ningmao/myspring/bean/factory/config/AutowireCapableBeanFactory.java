@@ -6,7 +6,7 @@ import top.ningmao.myspring.bean.factory.BeanFactory;
  * @author ningmao
  * @since 2025-5-8
  */
-public interface AutowrieCapableBeanFactory extends BeanFactory {
+public interface AutowireCapableBeanFactory extends BeanFactory {
     
     /**
      * 执行BeanPostProcessors的postProcessBeforeInitialization方法

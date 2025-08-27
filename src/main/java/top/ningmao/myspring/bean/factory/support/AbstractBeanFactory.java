@@ -19,7 +19,7 @@ import java.util.Map;
  * @author ningmao
  * @since 2025-4-29
  */
-public abstract class AbstraceBeanFactory extends DefaultSingletonBeanRegistry implements  ConfigurableBeanFactory{
+public abstract class AbstractBeanFactory extends DefaultSingletonBeanRegistry implements  ConfigurableBeanFactory{
     
     private final List<BeanPostProcessor> beanPostProcessors = new ArrayList<>();
     

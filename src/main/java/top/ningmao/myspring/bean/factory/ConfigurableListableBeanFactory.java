@@ -2,7 +2,7 @@ package top.ningmao.myspring.bean.factory;
 
 
 import top.ningmao.myspring.bean.BeansException;
-import top.ningmao.myspring.bean.factory.config.AutowrieCapableBeanFactory;
+import top.ningmao.myspring.bean.factory.config.AutowireCapableBeanFactory;
 import top.ningmao.myspring.bean.factory.config.BeanDefinition;
 import top.ningmao.myspring.bean.factory.config.BeanPostProcessor;
 import top.ningmao.myspring.bean.factory.config.ConfigurableBeanFactory;
@@ -13,7 +13,7 @@ import top.ningmao.myspring.util.StringValueResolver;
  * @author ningmao
  * @since 2025-5-8
  */
-public interface ConfigurableListableBeanFactory extends ListableBeanFactory, AutowrieCapableBeanFactory, ConfigurableBeanFactory {
+public interface ConfigurableListableBeanFactory extends ListableBeanFactory, AutowireCapableBeanFactory, ConfigurableBeanFactory {
     
     
     /**

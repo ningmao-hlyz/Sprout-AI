@@ -21,7 +21,7 @@ import java.lang.reflect.Method;
  * @author ningmao
  * @since 2025-4-29
  */
-public abstract class AbstractAutowireCapableBeanFactory extends AbstraceBeanFactory implements AutowrieCapableBeanFactory, ConfigurableBeanFactory {
+public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFactory implements AutowireCapableBeanFactory, ConfigurableBeanFactory {
     
     private InstantiationStrategy instantiationStrategy =  new SimpleInstantiationStrategy();
     
