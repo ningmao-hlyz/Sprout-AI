@@ -1,6 +1,14 @@
 package top.ningmao.myspring.aop;
 
 import org.aopalliance.intercept.MethodInterceptor;
+import top.ningmao.myspring.aop.framework.AdvisorChainFactory;
+import top.ningmao.myspring.aop.framework.DefaultAdvisorChainFactory;
+
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * AOP 核心配置类
@@ -15,6 +23,16 @@ public class AdvisedSupport {
 
     //是否使用cglib代理
     private boolean proxyTargetClass = true;
+
+    // 方法拦截器缓存
+    private transient Map<Integer, List<Object>> methodCache;
+
+    // 创建AdvisorChain，AdvisorChain是通知链，
+    AdvisorChainFactory advisorChainFactory = new DefaultAdvisorChainFactory();
+
+    // Advisor 列表
+    private List<Advisor> advisors = new ArrayList<>();
+
 
     // 目标对象源：
     // 封装了被代理的原始对象（目标对象）。
@@ -39,6 +57,9 @@ public class AdvisedSupport {
         return targetSource;
     }
 
+
+
+
     /**
      * 设置目标对象源。
      * @param targetSource 目标对象源实例。
@@ -55,6 +76,10 @@ public class AdvisedSupport {
         return methodInterceptor;
     }
 
+
+    public AdvisedSupport() {
+        this.methodCache = new ConcurrentHashMap<>(32);
+    }
     /**
      * 设置方法拦截器。
      * @param methodInterceptor 方法拦截器实例。
@@ -63,6 +88,22 @@ public class AdvisedSupport {
         this.methodInterceptor = methodInterceptor;
     }
 
+    /**
+     * 添加一个通知（Advisor）。
+     * @param advisor 通知实例。
+     */
+    public void addAdvisor(Advisor advisor) {
+        advisors.add(advisor);
+    }
+
+
+    /**
+     * 获取通知列表。
+     * @return 通知列表。
+     */
+    public List<Advisor> getAdvisors() {
+        return advisors;
+    }
     /**
      * 获取方法匹配器。
      * @return 方法匹配器实例。
@@ -86,5 +127,17 @@ public class AdvisedSupport {
     public void setProxyTargetClass(boolean proxyTargetClass) {
         this.proxyTargetClass = proxyTargetClass;
     }
-
+    /**
+     * 用来返回方法的拦截器链
+     */
+    public List<Object> getInterceptorsAndDynamicInterceptionAdvice(Method method, Class<?> targetClass) {
+        Integer cacheKey=method.hashCode();
+        List<Object> cached = this.methodCache.get(cacheKey);
+        if (cached == null) {
+            cached = this.advisorChainFactory.getInterceptorsAndDynamicInterceptionAdvice(
+                    this, method, targetClass);
+            this.methodCache.put(cacheKey, cached);
+        }
+        return cached;
+    }
 }

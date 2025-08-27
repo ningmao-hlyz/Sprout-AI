@@ -37,6 +37,10 @@ public class BeanDefinition {
     
     // 是否是原型，默认 false
     private boolean prototype = false;
+
+    // 是否是懒加载，默认 false
+    private boolean lazyInit=false;
+
     
     public BeanDefinition(Class beanClass) {
         this(beanClass, null);
@@ -92,4 +96,14 @@ public class BeanDefinition {
     public void setDestroyMethodName(String destroyMethodName) {
         this.destroyMethodName = destroyMethodName;
     }
+
+    public boolean isLazyInit(){
+        return lazyInit;
+    }
+
+    public void setLazyInit(boolean b){
+        lazyInit=b;
+    }
+
+
 }

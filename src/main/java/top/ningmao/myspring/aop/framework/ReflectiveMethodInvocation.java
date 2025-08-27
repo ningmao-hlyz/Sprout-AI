@@ -1,9 +1,12 @@
 package top.ningmao.myspring.aop.framework;
 
+import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Method;
+import java.util.List;
+
 /**
  * ReflectiveMethodInvocation 封装了通过反射调用方法所需的一切信息：
  * 目标对象、目标方法和方法参数。
@@ -14,16 +17,27 @@ import java.lang.reflect.Method;
  */
 public class ReflectiveMethodInvocation implements MethodInvocation {
 
+    protected final Object proxy; // 代理对象
+
     protected final Object target;      // 被调用的目标对象
 
     protected final Method method;      // 被调用的方法
 
     protected final Object[] arguments; // 方法参数
 
-    public ReflectiveMethodInvocation(Object target, Method method, Object[] arguments) {
+    protected final Class<?> targetClass; // 目标对象对应的 Class
+
+    protected final List<Object> interceptorsAndDynamicMethodMatchers; // 拦截器列表
+
+    private int currentInterceptorIndex = -1; // 当前拦截器索引
+
+    public ReflectiveMethodInvocation(Object proxy,Object target, Method method, Object[] arguments,Class<?> targetClass,List<Object> chain) {
+        this.proxy=proxy;
         this.target = target;
         this.method = method;
         this.arguments = arguments;
+        this.targetClass=targetClass;
+        this.interceptorsAndDynamicMethodMatchers=chain;
     }
 
     // 获取目标方法
@@ -44,10 +58,19 @@ public class ReflectiveMethodInvocation implements MethodInvocation {
         return target;
     }
 
-    // 获取方法执行器
     @Override
     public Object proceed() throws Throwable {
-        return method.invoke(target, arguments);
+        // 初始currentInterceptorIndex为-1，每调用一次proceed就把currentInterceptorIndex+1
+        if (this.currentInterceptorIndex == this.interceptorsAndDynamicMethodMatchers.size() - 1) {
+            // 当调用次数 = 拦截器个数时
+            // 触发当前method方法
+            return method.invoke(this.target, this.arguments);
+        }
+
+        Object interceptorOrInterceptionAdvice =
+                this.interceptorsAndDynamicMethodMatchers.get(++this.currentInterceptorIndex);
+        // 普通拦截器，直接触发拦截器invoke方法
+        return ((MethodInterceptor) interceptorOrInterceptionAdvice).invoke(this);
     }
 
 

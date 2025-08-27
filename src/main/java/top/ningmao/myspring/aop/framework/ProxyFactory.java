@@ -3,25 +3,17 @@ package top.ningmao.myspring.aop.framework;
 import top.ningmao.myspring.aop.AdvisedSupport;
 
 /**
- * ProxyFactory 是 AOP 框架中的代理工厂类，用于根据配置生成目标对象的代理实例。
+ * ProxyFactory 是 AOP 框架中的代理工厂类
+ * 用于根据配置生成目标对象的代理实例。
  *
  * @author NingMao
  * @since 2025-07-12
  */
-public class ProxyFactory {
+public class ProxyFactory extends AdvisedSupport{
 
-    /**
-     * AOP 配置信息封装类，包含目标对象、通知链、是否使用类代理等信息
-     */
-    private AdvisedSupport advisedSupport;
 
-    /**
-     * 构造方法：初始化代理工厂，注入 AOP 配置信息
-     *
-     * @param advisedSupport 包含代理目标对象、拦截器等配置的支持类
-     */
-    public ProxyFactory(AdvisedSupport advisedSupport) {
-        this.advisedSupport = advisedSupport;
+
+    public ProxyFactory() {
     }
 
     /**
@@ -40,12 +32,15 @@ public class ProxyFactory {
      * @return AopProxy 接口的实现类（JdkDynamicAopProxy 或 CglibAopProxy）
      */
     private AopProxy createAopProxy() {
-        // 如果设置为使用类代理（proxyTargetClass 为 true），则使用 CGLIB 动态字节码生成代理
-        if (advisedSupport.isProxyTargetClass()) {
-            return new CglibAopProxy(advisedSupport);
+        // 当需要使用类代理时：
+        // 1. 如果 proxyTargetClass = true，则强制使用基于类的代理（CGLIB 方式）。
+        // 2. 如果目标类没有实现任何接口（targetClass.length == 0），也只能使用 CGLIB。
+        // 满足上述条件时，返回 CglibAopProxy 实例。
+        if (this.isProxyTargetClass() || this.getTargetSource().getTargetClass().length == 0) {
+            return new CglibAopProxy(this);
         }
 
         // 否则默认使用 JDK 的动态代理（要求目标对象必须实现接口）
-        return new JdkDynamicAopProxy(advisedSupport);
+        return new JdkDynamicAopProxy(this);
     }
 }

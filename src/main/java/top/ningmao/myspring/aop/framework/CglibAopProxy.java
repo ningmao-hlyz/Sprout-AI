@@ -1,8 +1,10 @@
 package top.ningmao.myspring.aop.framework;
 
-import org.springframework.cglib.proxy.Enhancer;
-import org.springframework.cglib.proxy.MethodInterceptor;
-import org.springframework.cglib.proxy.MethodProxy;
+import java.util.List;
+
+import net.sf.cglib.proxy.Enhancer;
+import net.sf.cglib.proxy.MethodInterceptor;
+import net.sf.cglib.proxy.MethodProxy;
 import top.ningmao.myspring.aop.AdvisedSupport;
 
 import java.lang.reflect.Method;
@@ -62,27 +64,35 @@ import java.lang.reflect.Method;
         }
 
         /**
-         * 当代理对象方法被调用时，会进入该方法。
-         * 判断是否需要增强（是否匹配切点）：
-         * - 是：执行 AOP 拦截器逻辑；
-         * - 否：直接调用原方法。
+         * 拦截方法调用
+         * - CGLIB 提供的 MethodInterceptor 接口，用于拦截方法调用
          */
         @Override
-        public Object intercept(Object proxyObject, Method method, Object[] args, MethodProxy methodProxy) throws Throwable {
+        public Object intercept(Object proxy, Method method, Object[] args, MethodProxy methodProxy) throws Throwable {
+            // 1. 获取目标对象实例（被代理的真实对象）
+            Object target = advised.getTargetSource().getTarget();
+            Class<?> targetClass = target.getClass();
+            Object retVal = null;
 
-            // 构造一个方法调用对象（封装了 method、args、target）
+            // 2. 根据方法和目标类，获取对应的拦截器链
+            List<Object> chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
+
+            // 3. 封装成 CglibMethodInvocation，用于链式调用（责任链模式）
             CglibMethodInvocation methodInvocation =
-                    new CglibMethodInvocation(advised.getTargetSource().getTarget(), method, args, methodProxy);
+                    new CglibMethodInvocation(proxy, target, method, args, targetClass, chain, methodProxy);
 
-            // 判断方法是否匹配切点表达式
-            if (advised.getMethodMatcher().matches(method, advised.getTargetSource().getTarget().getClass())) {
-                // 命中切点，执行 AOP 拦截器逻辑
-                return advised.getMethodInterceptor().invoke(methodInvocation);
+            if (chain == null || chain.isEmpty()) {
+                // 4. 如果没有任何拦截器，直接调用目标方法（通过 CGLIB 提供的 methodProxy）
+                retVal = methodProxy.invoke(target, args);
+            } else {
+                // 5. 如果存在拦截器，按顺序执行拦截器链，最终调用目标方法
+                retVal = methodInvocation.proceed();
             }
 
-            // 没命中切点，直接调用原方法
-            return methodInvocation.proceed();
+            // 6. 返回方法执行结果（可能被拦截器增强过）
+            return retVal;
         }
+
 
     }
 
@@ -100,19 +110,16 @@ import java.lang.reflect.Method;
          */
         private final MethodProxy methodProxy; // CGLIB 提供的高效方法代理对象
 
-        public CglibMethodInvocation(Object target, Method method, Object[] arguments, MethodProxy methodProxy) {
-            super(target, method, arguments); // 调用父类构造保存 target/method/args
+        public CglibMethodInvocation(Object proxy, Object target, Method method,
+                                     Object[] arguments, Class<?> targetClass,
+                                     List<Object> interceptorsAndDynamicMethodMatchers, MethodProxy methodProxy) {
+            super(proxy, target, method, arguments, targetClass, interceptorsAndDynamicMethodMatchers);
             this.methodProxy = methodProxy;
         }
 
-        /**
-         * 执行目标方法
-         * - CGLIB 提供 MethodProxy 比反射更高效
-         */
         @Override
         public Object proceed() throws Throwable {
-            // 调用目标方法：目标对象 + 参数
-            return this.methodProxy.invoke(this.target, this.arguments);
+            return super.proceed();
         }
     }
 }

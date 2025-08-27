@@ -4,6 +4,7 @@ package top.ningmao.myspring.bean;
 import top.ningmao.myspring.bean.factory.annotation.Value;
 import top.ningmao.myspring.stereotype.Component;
 
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 
 /**
@@ -20,6 +21,8 @@ public class Car {
 
     @Value("${brand}")
     private String brand;
+
+    private long date;
 
     public String getBrand() {
         return brand;
@@ -52,5 +55,14 @@ public class Car {
                 ", produceDate=" + produceDate +
                 ", brand='" + brand + '\'' +
                 '}';
+    }
+
+    public void init() {
+        date = System.currentTimeMillis();
+    }
+
+    public void showTime() {
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd :hh:mm:ss");
+        System.out.println(date + ":bean create");
     }
 }

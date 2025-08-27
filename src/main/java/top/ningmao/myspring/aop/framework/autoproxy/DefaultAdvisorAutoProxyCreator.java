@@ -1,8 +1,6 @@
 package top.ningmao.myspring.aop.framework.autoproxy;
 
-
 import org.aopalliance.aop.Advice;
-import org.aopalliance.intercept.MethodInterceptor;
 import top.ningmao.myspring.aop.*;
 import top.ningmao.myspring.aop.aspectj.AspectJExpressionPointcutAdvisor;
 import top.ningmao.myspring.aop.framework.ProxyFactory;
@@ -10,7 +8,6 @@ import top.ningmao.myspring.bean.BeansException;
 import top.ningmao.myspring.bean.PropertyValues;
 import top.ningmao.myspring.bean.factory.BeanFactory;
 import top.ningmao.myspring.bean.factory.BeanFactoryAware;
-import top.ningmao.myspring.bean.factory.config.BeanDefinition;
 import top.ningmao.myspring.bean.factory.config.InstantiationAwareBeanPostProcessor;
 import top.ningmao.myspring.bean.factory.support.DefaultListableBeanFactory;
 
@@ -40,48 +37,68 @@ public class DefaultAdvisorAutoProxyCreator implements InstantiationAwareBeanPos
     }
 
     /**
-     * 核心 AOP 创建代理逻辑
+     * 判断当前 bean 是否需要被 AOP 代理，如果需要则创建代理对象。
+     *
+     * 主要逻辑：
+     * 1. 过滤基础设施类（如 Advisor、Advice 自身），避免出现死循环。
+     * 2. 从容器中获取所有的 AspectJExpressionPointcutAdvisor（切面配置）。
+     * 3. 遍历所有 Advisor，判断其切点是否匹配当前 bean 的 Class。
+     * 4. 如果匹配：
+     *    - 将 bean 封装成 TargetSource
+     *    - 配置到 ProxyFactory 中
+     *    - 添加对应的 Advisor（增强逻辑）
+     *    - 设置 MethodMatcher（方法级别匹配）
+     * 5. 如果最终 ProxyFactory 中存在 Advisor，则为该 bean 生成代理对象并返回。
+     * 6. 否则，直接返回原始 bean。
+     *
+     * @param bean     当前正在创建的 bean
+     * @param beanName bean 的名称
+     * @return 如果需要代理则返回代理对象，否则返回原始 bean
      */
-    public Object wrapIfNecessary(Object bean, String beanName) throws BeansException {
-        // 如果是基础设施类（比如 Advice、Advisor、Pointcut 本身），直接返回，避免给它们再创建代理，防止死循环
+    protected Object wrapIfNecessary(Object bean, String beanName) {
+        // 1. 基础设施类不做代理（如 Advisor / Advice 自身），避免死循环
         if (isInfrastructureClass(bean.getClass())) {
             return bean;
         }
 
-        // 获取容器中所有的 Advisor（这里是表达式形式的 PointcutAdvisor）
+        // 2. 获取容器中所有切面配置（AspectJ 风格的 PointcutAdvisor）
         Collection<AspectJExpressionPointcutAdvisor> advisors =
                 beanFactory.getBeansOfType(AspectJExpressionPointcutAdvisor.class).values();
 
         try {
-            // 遍历所有的 Advisor，找出匹配当前 bean 的那些
+            ProxyFactory proxyFactory = new ProxyFactory();
+
+            // 3. 遍历所有 Advisor，判断是否适用于当前 bean
             for (AspectJExpressionPointcutAdvisor advisor : advisors) {
-                // 判断当前 advisor 的 ClassFilter 是否匹配 bean 的类型
                 ClassFilter classFilter = advisor.getPointcut().getClassFilter();
+
                 if (classFilter.matches(bean.getClass())) {
-                    // 准备代理所需的配置信息
-                    AdvisedSupport advisedSupport = new AdvisedSupport();
-
-                    // 设置目标对象
+                    // 3.1 封装目标对象
                     TargetSource targetSource = new TargetSource(bean);
-                    advisedSupport.setTargetSource(targetSource);
+                    proxyFactory.setTargetSource(targetSource);
 
-                    // 设置通知（MethodInterceptor）
-                    advisedSupport.setMethodInterceptor((MethodInterceptor) advisor.getAdvice());
+                    // 3.2 添加切面增强（Advisor）
+                    proxyFactory.addAdvisor(advisor);
 
-                    // 设置方法匹配器（Pointcut 内部的 MethodMatcher）
-                    advisedSupport.setMethodMatcher(advisor.getPointcut().getMethodMatcher());
-
-                    // 创建代理并返回（此时拦截器和匹配器都起作用了）
-                    return new ProxyFactory(advisedSupport).getProxy();
+                    // 3.3 设置方法匹配器（方法级别切点）
+                    proxyFactory.setMethodMatcher(advisor.getPointcut().getMethodMatcher());
                 }
             }
+
+            // 4. 如果存在适用的 Advisor，则为该 bean 创建代理
+            if (!proxyFactory.getAdvisors().isEmpty()) {
+                return proxyFactory.getProxy();
+            }
+
         } catch (Exception ex) {
+            // 5. 创建代理失败，抛出异常
             throw new BeansException("Error create proxy bean for: " + beanName, ex);
         }
 
-        // 如果没有匹配的 Advisor，就直接返回原始 bean，不做代理
+        // 6. 如果没有匹配的 Advisor，直接返回原始 bean
         return bean;
     }
+
 
 
     /**

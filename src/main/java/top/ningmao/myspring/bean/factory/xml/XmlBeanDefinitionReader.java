@@ -39,6 +39,7 @@ public class XmlBeanDefinitionReader extends AbstractBeanDefinitionReader {
     public static final String SCOPE_ATTRIBUTE = "scope";
     public static final String BASE_PACKAGE_ATTRIBUTE = "base-package";
     public static final String COMPONENT_SCAN_ELEMENT = "component-scan";
+    public static final String LAZYINIT_ATTRIBUTE = "lazyInit";
 
 
     public XmlBeanDefinitionReader(BeanDefinitionRegistry registry) {
@@ -103,6 +104,7 @@ public class XmlBeanDefinitionReader extends AbstractBeanDefinitionReader {
             String initMethodName = bean.attributeValue(INIT_METHOD_ATTRIBUTE);
             String destroyMethodName = bean.attributeValue(DESTROY_METHOD_ATTRIBUTE);
             String beanScope = bean.attributeValue(SCOPE_ATTRIBUTE);
+            String lazyInit = bean.attributeValue(LAZYINIT_ATTRIBUTE);
 
             // 根据 className 加载对应的类
             Class<?> clazz;
@@ -122,6 +124,7 @@ public class XmlBeanDefinitionReader extends AbstractBeanDefinitionReader {
             BeanDefinition beanDefinition = new BeanDefinition(clazz);
             beanDefinition.setInitMethodName(initMethodName);
             beanDefinition.setDestroyMethodName(destroyMethodName);
+            beanDefinition.setLazyInit(StrUtil.isNotEmpty(lazyInit) && Boolean.parseBoolean(lazyInit));
             if (StrUtil.isNotEmpty(beanScope)) {
                 beanDefinition.setScope(beanScope);
             }
