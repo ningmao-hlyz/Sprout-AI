@@ -1,6 +1,9 @@
 package top.ningmao.myspring.ai.chat.model;
 
 
+import top.ningmao.myspring.ai.chat.messages.Message;
+import top.ningmao.myspring.ai.chat.prompt.Prompt;
+
 /**
  * Mock ChatModel 实现 - 用于测试和演示
  *
@@ -20,8 +23,16 @@ public class MockChatModel implements ChatModel {
     }
 
     @Override
-    public String call(String message) {
-        // 简单的固定回复
-        return prefix + ": 收到你的消息 [" + message + "]";
+    public ChatResponse call(Prompt prompt) {
+        // 获取所有消息并生成回复
+        StringBuilder response = new StringBuilder(prefix + " 回复：\n");
+
+        for (Message message : prompt.getMessages()) {
+            response.append("- 收到 ").append(message.getMessageType().getValue())
+                    .append(" 消息: [").append(message.getContent()).append("]\n");
+        }
+
+        // 创建响应
+        return new ChatResponse(response.toString().trim());
     }
 }

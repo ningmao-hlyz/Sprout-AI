@@ -4713,6 +4713,195 @@ public void testPromptFromMultipleMessages() {
 }
 ```
 
+### ChatModel实现，结构化，高扩展
+
+> 代码分支: chat-model
+
+![chat-flow.png](assets/chat-flow.png)
+
+在前面实现了 Message 和 Prompt 的基础上，现在需要完善 ChatModel 接口，让它能够处理 Prompt 对象并返回结构化的 ChatResponse。
+
+#### 架构设计
+
+参考 Spring AI 官方设计，建立分层架构：
+
+**基础模型层 (`model` 包)** - 通用抽象
+```java
+public interface ModelRequest<I> {
+    I getInstructions();
+    ModelOptions getOptions();
+}
+
+public interface ModelResponse<T> {
+    List<T> getResults();
+    default T getResult() {
+        List<T> results = getResults();
+        return (results != null && !results.isEmpty()) ? results.get(0) : null;
+    }
+}
+
+public abstract class ModelResult<T> {
+    public abstract T getOutput();
+}
+```
+
+**聊天应用层 (`chat` 包)** - 具体实现
+
+```java
+// Prompt 实现 ModelRequest
+public class Prompt implements ModelRequest<List<Message>> {
+    private final List<Message> messages;
+    private final ChatOptions chatOptions;
+    
+    @Override
+    public List<Message> getInstructions() {
+        return new ArrayList<>(messages);
+    }
+    
+    @Override
+    public ChatOptions getOptions() {
+        return chatOptions;
+    }
+}
+```
+
+```java
+// Generation - 单次生成结果
+public class Generation extends ModelResult<AssistantMessage> {
+    private final AssistantMessage assistantMessage;
+    
+    public Generation(String text) {
+        this(new AssistantMessage(text));
+    }
+    
+    public Generation(AssistantMessage assistantMessage) {
+        this.assistantMessage = assistantMessage;
+    }
+    
+    @Override
+    public AssistantMessage getOutput() {
+        return assistantMessage;
+    }
+}
+```
+
+```java
+// ChatResponse 实现 ModelResponse
+public class ChatResponse implements ModelResponse<Generation> {
+    private final List<Generation> generations;
+    
+    public ChatResponse(List<Generation> generations) {
+        this.generations = generations != null ? 
+            new ArrayList<>(generations) : new ArrayList<>();
+    }
+    
+    public ChatResponse(String text) {
+        this.generations = new ArrayList<>();
+        this.generations.add(new Generation(text));
+    }
+    
+    @Override
+    public List<Generation> getResults() {
+        return new ArrayList<>(generations);
+    }
+    
+    public String getOutput() {
+        Generation result = getResult();
+        if (result == null || result.getOutput() == null) {
+            return null;
+        }
+        return result.getOutput().getContent();
+    }
+}
+```
+
+```java
+// ChatModel 核心接口
+public interface ChatModel {
+    ChatResponse call(Prompt message);
+    
+    default String call(String message) {
+        Prompt prompt = new Prompt(message);
+        ChatResponse response = call(prompt);
+        return response.getOutput();
+    }
+}
+```
+
+测试
+
+```java
+@Test
+public void testCallWithPrompt() {
+    ChatModel chatModel = new MockChatModel();
+    
+    // 使用 Prompt 调用
+    Prompt prompt = new Prompt("你好，Sprout AI！");
+    ChatResponse response = chatModel.call(prompt);
+    
+    assertThat(response).isNotNull();
+    assertThat(response.getOutput()).contains("你好，Sprout AI！");
+    
+    System.out.println("Response: " + response.getOutput());
+}
+
+@Test
+public void testCallWithString() {
+    ChatModel chatModel = new MockChatModel();
+    
+    // 使用简化的 String 调用（默认方法）
+    String response = chatModel.call("测试简化调用");
+    
+    assertThat(response).isNotNull();
+    assertThat(response).contains("测试简化调用");
+    
+    System.out.println("Response: " + response);
+}
+
+@Test
+public void testCallWithMultipleMessages() {
+    ChatModel chatModel = new MockChatModel("智能助手");
+    
+    // 创建带系统提示词的 Prompt
+    Prompt prompt = new Prompt(
+        new SystemMessage("你是一个 Java 专家"),
+        new UserMessage("什么是 Spring IoC？")
+    );
+    
+    ChatResponse response = chatModel.call(prompt);
+    
+    assertThat(response.getOutput()).contains("Java 专家");
+    assertThat(response.getOutput()).contains("Spring IoC");
+    
+    System.out.println("Multi-message response:\n" + response.getOutput());
+}
+
+@Test
+public void testChatResponseGeneration() {
+    ChatModel chatModel = new MockChatModel();
+    Prompt prompt = new Prompt("测试");
+    
+    ChatResponse response = chatModel.call(prompt);
+    
+    // 测试 Generation
+    assertThat(response.getResult()).isNotNull();
+    assertThat(response.getResult().getOutput()).isNotNull();
+    assertThat(response.getResults()).hasSize(1);
+    
+    System.out.println("Generation: " + response.getResult());
+}
+```
+
+#### 设计模式应用
+
+**1. 接口隔离原则** - `ModelRequest`、`ModelResponse`、`ModelOptions` 各司其职
+
+**2. 模板方法模式** - `ModelResult` 定义抽象方法，`Generation` 实现细节。（通过泛形和抽象来实现模版模式）
+
+**3. 策略模式** - `ChatModel` 接口，不同 AI 提供商实现不同策略
+
+
+
 # 其他
 
 - 微信：ningmaohlyz
