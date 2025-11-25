@@ -4490,7 +4490,7 @@ public void testAutoProxy() throws Exception {
 
 ### 最简单的聊天实现
 
->  simple-chat-model
+> 代码分支: simple-chat-model
 
 ```java
 public interface ChatModel {  
