@@ -1,9 +1,9 @@
 package top.ningmao.myspring.ai.chat;
 
 import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 import top.ningmao.myspring.ai.chat.model.ChatModel;
 import top.ningmao.myspring.ai.chat.model.MockChatModel;
-import static org.assertj.core.api.Assertions.assertThat;
 
 
 /**

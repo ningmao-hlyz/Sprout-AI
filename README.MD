@@ -4490,7 +4490,7 @@ public void testAutoProxy() throws Exception {
 
 ### 最简单的聊天实现
 
->  simple-chat-model
+>  代码分支: simple-chat-model
 
 ```java
 public interface ChatModel {  
@@ -4519,6 +4519,88 @@ public void testMockChatModel() {
     assertThat(response).isNotNull();  
     assertThat(response).contains("你好，Sprout AI！");  
     System.out.println("AI回复: " + response);  
+}
+```
+
+### 聊天消息类型实现
+
+>  代码分支: chat-message
+
+
+实现了三种消息类型，用户，系统，AI回答，可参考ai.chat.messages包下的内容
+
+```java
+public interface Message {
+
+    /**
+     * 获取消息内容
+     *
+     * @return 消息的文本内容
+     */
+    String getContent();
+
+    /**
+     * 获取消息类型（角色）
+     *
+     * @return 消息类型枚举
+     */
+    MessageType getMessageType();
+
+    /**
+     * 获取元数据
+     * <p>
+     * 元数据可以包含额外信息，如时间戳、来源等
+     *
+     * @return 元数据 Map
+     */
+    Map<String, Object> getMetadata();
+}
+```
+
+测试
+```java
+@Test
+public void testUserMessage() {
+    Message message = new UserMessage("你好，AI！");
+
+    assertThat(message.getContent()).isEqualTo("你好，AI！");
+    assertThat(message.getMessageType()).isEqualTo(MessageType.USER);
+    assertThat(message.getMetadata()).isNotNull();
+
+    System.out.println(message);
+}
+
+@Test
+public void testSystemMessage() {
+    Message message = new SystemMessage("你是一个有帮助的助手");
+
+    assertThat(message.getContent()).isEqualTo("你是一个有帮助的助手");
+    assertThat(message.getMessageType()).isEqualTo(MessageType.SYSTEM);
+
+    System.out.println(message);
+}
+
+@Test
+public void testAssistantMessage() {
+    Message message = new AssistantMessage("我很乐意帮助你！");
+
+    assertThat(message.getContent()).isEqualTo("我很乐意帮助你！");
+    assertThat(message.getMessageType()).isEqualTo(MessageType.ASSISTANT);
+
+    System.out.println(message);
+}
+
+@Test
+public void testMessageWithMetadata() {
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("timestamp", System.currentTimeMillis());
+    metadata.put("source", "test");
+
+    Message message = new UserMessage("带元数据的消息", metadata);
+
+    assertThat(message.getMetadata()).containsKey("timestamp");
+    assertThat(message.getMetadata()).containsKey("source");
+    assertThat(message.getMetadata().get("source")).isEqualTo("test");
 }
 ```
 
