@@ -4604,6 +4604,115 @@ public void testMessageWithMetadata() {
 }
 ```
 
+### Prompt 实现
+
+>  代码分支: chat-prompt
+
+prompt 是与大模型交互的载体，内部承接不同的消息模型
+
+```java
+public class Prompt {
+
+    /**
+     * 消息列表
+     */
+    private final List<Message> messages;
+
+    /**
+     * 从单个字符串创建 Prompt（最简单的方式）
+     */
+    public Prompt(String content) {
+        this(new UserMessage(content));
+    }
+
+    /**
+     * 从单个消息创建 Prompt
+     */
+    public Prompt(Message message) {
+        this.messages = new ArrayList<>();
+        this.messages.add(message);
+    }
+
+    /**
+     * 从消息列表创建 Prompt
+     */
+    public Prompt(List<Message> messages) {
+        this.messages = new ArrayList<>(messages);
+    }
+
+    /**
+     * 从可变参数消息创建 Prompt
+     */
+    public Prompt(Message... messages) {
+        this.messages = new ArrayList<>(Arrays.asList(messages));
+    }
+
+    /**
+     * 获取指令
+     */
+    public List<Message> getInstructions() {
+        return new ArrayList<>(messages);
+    }
+
+    /**
+     * 获取消息列表
+     */
+    public List<Message> getMessages() {
+        return new ArrayList<>(messages);
+    }
+
+    @Override
+    public String toString() {
+        return "Prompt{" +
+                "messages=" + messages +
+                '}';
+    }
+}
+```
+
+测试
+```java
+@Test
+public void testPromptFromString() {
+    // 最简单的创建方式
+    Prompt prompt = new Prompt("你好，AI！");
+
+    List<Message> messages = prompt.getMessages();
+    assertThat(messages).hasSize(1);
+    assertThat(messages.get(0).getContent()).isEqualTo("你好，AI！");
+
+    System.out.println("Prompt: " + prompt);
+}
+
+@Test
+public void testPromptFromMessage() {
+    // 从单个消息创建
+    UserMessage userMessage = new UserMessage("告诉我关于 Spring 的知识");
+    Prompt prompt = new Prompt(userMessage);
+
+    assertThat(prompt.getMessages()).hasSize(1);
+    assertThat(prompt.getMessages().get(0).getContent()).contains("Spring");
+
+    System.out.println("Prompt: " + prompt);
+}
+
+@Test
+public void testPromptFromMultipleMessages() {
+    // 从多个消息创建（带系统提示词）
+    SystemMessage systemMessage = new SystemMessage("你是一个 Java 专家");
+    UserMessage userMessage = new UserMessage("什么是 Spring IoC？");
+
+    Prompt prompt = new Prompt(systemMessage, userMessage);
+
+    List<Message> messages = prompt.getMessages();
+    assertThat(messages).hasSize(2);
+    assertThat(messages.get(0).getContent()).contains("Java 专家");
+    assertThat(messages.get(1).getContent()).contains("Spring IoC");
+
+    System.out.println("Prompt with system message: " + prompt);
+}
+```
+
 # 其他
 
 - 微信：ningmaohlyz
