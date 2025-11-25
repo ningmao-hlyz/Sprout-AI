@@ -4484,8 +4484,45 @@ public void testAutoProxy() throws Exception {
 
 **输出结果:** 与编程方式完全一致，证明多切面已成功融入 Bean 的自动化生命周期管理。
 
+# AI
 
-## 其他
+## Chat
+
+### 最简单的聊天实现
+
+>  simple-chat-model
+
+```java
+public interface ChatModel {  
+  
+    /**  
+     * 最简单的调用方式 - 发送文本，获取文本回复  
+     *  
+     * @param message 用户消息  
+     * @return AI 的回复文本  
+     */  
+    String call(String message);  
+}
+```
+
+测试
+```java
+@Test  
+public void testMockChatModel() {  
+    // 创建 Mock ChatModel    
+    ChatModel chatModel = new MockChatModel("NingMao");  
+  
+    // 调用  
+    String response = chatModel.call("你好，Sprout AI！");  
+  
+    // 验证  
+    assertThat(response).isNotNull();  
+    assertThat(response).contains("你好，Sprout AI！");  
+    System.out.println("AI回复: " + response);  
+}
+```
+
+# 其他
 
 - 微信：ningmaohlyz
 - 短视频，b站与抖音搜索宁猫
