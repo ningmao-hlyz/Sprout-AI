@@ -4900,7 +4900,330 @@ public void testChatResponseGeneration() {
 
 **3. 策略模式** - `ChatModel` 接口，不同 AI 提供商实现不同策略
 
+### 接入模型DeepSeek
 
+>  代码分支: chat-deepseek
+
+该分支延续之前的实现，并接入了真正的大模型DeepSeek，
+与SpringAI不同的是，SpringAI采用SpringBoot的模式来管理Bean，本实现采用的是Sprout的模式管理Bean，
+其余符合 Spring AI 官方标准，
+
+```xml
+    <!--
+配置 PropertyPlaceholderConfigurer 读取 application.properties
+用于解析 ${} 占位符
+    -->
+    <bean class="top.ningmao.myspring.bean.factory.PropertyPlaceholderConfigurer">
+        <property name="location" value="classpath:application.properties" />
+    </bean>
+
+    <!--
+DeepSeek ChatModel Bean
+使用 FactoryBean 模式创建 ChatModel 实例
+    -->
+    <bean id="chatModel" class="top.ningmao.myspring.ai.config.DeepSeekChatModelFactoryBean">
+        <!-- API Key 从 application.properties 读取 -->
+        <property name="apiKey" value="${spring.ai.deepseek.api-key}"/>
+        
+        <!-- 模型名称 -->
+        <property name="model" value="deepseek-chat"/>
+        
+        <property name="temperature" value="0.7"/>
+        
+        <!-- 最大生成 token 数，省钱 -->
+        <property name="maxTokens" value="2048"/>
+    </bean>
+```
+
+```java
+public class DeepSeekChatModelFactoryBean implements FactoryBean<ChatModel> {
+
+    /**
+     * API Key（通过 XML 配置或属性注入）
+     */
+    private String apiKey;
+
+    /**
+     * 模型名称
+     */
+    private String model = "deepseek-chat";
+
+    /**
+     * 温度参数
+     */
+    private Float temperature = 0.7f;
+
+    /**
+     * 最大 Token 数
+     */
+    private Integer maxTokens = 2048;
+
+    @Override
+    public ChatModel getObject() throws Exception {
+        // 如果没有配置 API Key，尝试从环境变量获取
+        String actualApiKey = apiKey;
+        if (actualApiKey == null || actualApiKey.isBlank()) {
+            actualApiKey = System.getenv("DEEPSEEK_API_KEY");
+        }
+
+        if (actualApiKey == null || actualApiKey.isBlank()) {
+            throw new IllegalStateException(
+                    "DeepSeek API Key 未配置！\n" +
+                            "请在 XML 配置文件中配置 apiKey 属性，\n" +
+                            "或设置环境变量：export DEEPSEEK_API_KEY=your-key"
+            );
+        }
+
+        // 创建配置选项
+        DeepSeekChatOptions options = DeepSeekChatOptions.builder()
+                .model(model)
+                .temperature(temperature)
+                .maxTokens(maxTokens)
+                .build();
+
+        System.out.println("创建 DeepSeek ChatModel Bean: " + options);
+
+        return new DeepSeekChatModel(actualApiKey, options);
+    }
+}
+```
+
+```java
+/**
+ * DeepSeek ChatModel 实现
+ * 使用 DeepSeek API 进行 AI 对话
+ * <p>
+ * API 文档：https://platform.deepseek.com/api-docs/
+ *
+ * @author 宁猫
+ * @since 2025-11-25 20:54:10
+ */
+public class DeepSeekChatModel implements ChatModel {
+
+    /**
+     * DeepSeek API 地址
+     */
+    private static final String API_URL = "https://api.deepseek.com/v1/chat/completions";
+
+    /**
+     * API 密钥
+     */
+    private final String apiKey;
+
+    /**
+     * 默认配置选项
+     */
+    private final DeepSeekChatOptions defaultOptions;
+
+    public DeepSeekChatModel(String apiKey) {
+        this(apiKey, new DeepSeekChatOptions());
+    }
+
+    public DeepSeekChatModel(String apiKey, DeepSeekChatOptions defaultOptions) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalArgumentException("DeepSeek API key cannot be null or empty");
+        }
+        this.apiKey = apiKey;
+        this.defaultOptions = defaultOptions;
+    }
+
+    @Override
+    public ChatResponse call(Prompt prompt) {
+        try {
+            // 1. 构建请求体
+            JSONObject requestBody = buildRequestBody(prompt);
+
+            // 2. 发送 HTTP 请求
+            HttpResponse response = HttpRequest.post(API_URL)
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .body(requestBody.toString())
+                    .timeout(30000)  // 30秒超时
+                    .execute();
+
+            // 3. 检查响应状态
+            if (!response.isOk()) {
+                throw new RuntimeException("DeepSeek API call failed: " + response.getStatus() +
+                        ", body: " + response.body());
+            }
+
+            // 4. 解析响应
+            return parseResponse(response.body());
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to call DeepSeek API", e);
+        }
+    }
+
+    /**
+     * 构建 API 请求体
+     */
+    private JSONObject buildRequestBody(Prompt prompt) {
+        JSONObject requestBody = new JSONObject();
+
+        // 获取配置选项（优先使用 Prompt 中的配置）
+        ChatOptions options = prompt.getOptions() != null ? prompt.getOptions() : defaultOptions;
+
+        // 设置模型和参数
+        requestBody.set("model", options.getModel());
+        
+        if (options.getTemperature() != null) {
+            requestBody.set("temperature", options.getTemperature());
+        }
+        if (options.getMaxTokens() != null) {
+            requestBody.set("max_tokens", options.getMaxTokens());
+        }
+        if (options.getTopP() != null) {
+            requestBody.set("top_p", options.getTopP());
+        }
+        if (options.getFrequencyPenalty() != null) {
+            requestBody.set("frequency_penalty", options.getFrequencyPenalty());
+        }
+        if (options.getPresencePenalty() != null) {
+            requestBody.set("presence_penalty", options.getPresencePenalty());
+        }
+
+        // 构建消息数组
+        JSONArray messages = new JSONArray();
+        for (Message message : prompt.getMessages()) {
+            JSONObject msg = new JSONObject();
+            msg.set("role", message.getMessageType().getValue());
+            msg.set("content", message.getContent());
+            messages.add(msg);
+        }
+        requestBody.set("messages", messages);
+
+        return requestBody;
+    }
+
+    /**
+     * 解析 API 响应
+     */
+    private ChatResponse parseResponse(String responseBody) {
+        try {
+            JSONObject jsonResponse = JSONUtil.parseObj(responseBody);
+
+            // 检查是否有错误
+            if (jsonResponse.containsKey("error")) {
+                JSONObject error = jsonResponse.getJSONObject("error");
+                throw new RuntimeException("DeepSeek API error: " + error.getStr("message"));
+            }
+
+            // 解析 choices
+            JSONArray choices = jsonResponse.getJSONArray("choices");
+            if (choices == null || choices.isEmpty()) {
+                throw new RuntimeException("No choices in DeepSeek API response");
+            }
+
+            // 解析第一个 choice
+            JSONObject choice = choices.getJSONObject(0);
+            JSONObject messageJson = choice.getJSONObject("message");
+            String content = messageJson.getStr("content");
+
+            // 创建 Generation
+            AssistantMessage assistantMessage = new AssistantMessage(content);
+            Generation generation = new Generation(assistantMessage);
+
+            // 创建 ChatResponse
+            List<Generation> generations = new ArrayList<>();
+            generations.add(generation);
+
+            return new ChatResponse(generations);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to parse DeepSeek API response", e);
+        }
+    }
+
+    /**
+     * 获取 API 密钥
+     */
+    public String getApiKey() {
+        return apiKey;
+    }
+
+    /**
+     * 获取默认配置
+     */
+    public DeepSeekChatOptions getDefaultOptions() {
+        return defaultOptions;
+    }
+
+    @Override
+    public String toString() {
+        return "DeepSeekChatModel{" +
+                "apiKey='" + maskApiKey(apiKey) + '\'' +
+                ", defaultOptions=" + defaultOptions +
+                '}';
+    }
+
+    /**
+     * 掩码 API Key，用于日志输出
+     */
+    private String maskApiKey(String apiKey) {
+        if (apiKey == null || apiKey.length() < 8) {
+            return "***";
+        }
+        return apiKey.substring(0, 3) + "..." + apiKey.substring(apiKey.length() - 3);
+    }
+}
+```
+
+是不是非常简单呢，后续要接入其他模型，也可以按照类似的方法，一个个添加文件就行了。
+
+测试
+```java
+/**
+ * 测试从 Spring 容器获取 ChatModel Bean
+ */
+@Test
+public void testGetChatModelFromSpring() {
+    // 1. 创建 Spring 容器，加载 AI 配置
+    ClassPathXmlApplicationContext applicationContext =
+            new ClassPathXmlApplicationContext("classpath:ai-config.xml");
+
+    // 2. 从容器获取 ChatModel Bean
+    ChatModel chatModel = applicationContext.getBean("chatModel", ChatModel.class);
+
+    System.out.println("从 Spring 容器获取的 ChatModel: " + chatModel.getClass().getSimpleName());
+}
+
+/**
+ * 测试使用 Spring 管理的 ChatModel 进行调用
+ */
+@Test
+public void testCallWithSpringManagedChatModel() {
+    // 从 Spring 容器获取 ChatModel
+    ClassPathXmlApplicationContext applicationContext =
+            new ClassPathXmlApplicationContext("classpath:ai-config.xml");
+    ChatModel chatModel = applicationContext.getBean("chatModel", ChatModel.class);
+
+    // 调用 AI
+    String response = chatModel.call("你好，请用一句话介绍你自己");
+
+    System.out.println("AI 回复: " + response);
+}
+
+/**
+ * 测试带系统提示词的调用
+ */
+@Test
+public void testCallWithSystemMessage() {
+    ClassPathXmlApplicationContext applicationContext =
+            new ClassPathXmlApplicationContext("classpath:ai-config.xml");
+    ChatModel chatModel = applicationContext.getBean("chatModel", ChatModel.class);
+
+    // 创建 Prompt
+    Prompt prompt = new Prompt(
+            new SystemMessage("你是一个 Java 专家，请用简洁专业的语言回答"),
+            new UserMessage("什么是 Spring IoC？")
+    );
+
+    // 调用
+    ChatResponse response = chatModel.call(prompt);
+    System.out.println("AI 回复: " + response.getOutput());
+}
+```
 
 # 其他
 
