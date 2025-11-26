@@ -7,28 +7,35 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import top.ningmao.myspring.ai.chat.messages.AssistantMessage;
 import top.ningmao.myspring.ai.chat.messages.Message;
-import top.ningmao.myspring.ai.chat.model.ChatModel;
 import top.ningmao.myspring.ai.chat.model.ChatResponse;
 import top.ningmao.myspring.ai.chat.model.Generation;
+import top.ningmao.myspring.ai.chat.model.StreamingChatModel;
 import top.ningmao.myspring.ai.chat.prompt.ChatOptions;
 import top.ningmao.myspring.ai.chat.prompt.DeepSeekChatOptions;
 import top.ningmao.myspring.ai.chat.prompt.Prompt;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 
 
 /**
  * DeepSeek ChatModel 实现
- * 使用 DeepSeek API 进行 AI 对话
+ * 使用 DeepSeek API 进行 AI 对话，支持普通调用和流式响应
  * <p>
  * API 文档：https://platform.deepseek.com/api-docs/
  *
  * @author 宁猫
  * @since 2025-11-25 20:54:10
  */
-public class DeepSeekChatModel implements ChatModel {
+public class DeepSeekChatModel implements StreamingChatModel {
 
     /**
      * DeepSeek API 地址
@@ -196,4 +203,109 @@ public class DeepSeekChatModel implements ChatModel {
         }
         return apiKey.substring(0, 3) + "..." + apiKey.substring(apiKey.length() - 3);
     }
+
+    /**
+     * 流式调用 DeepSeek API
+     * <p>
+     * 使用 Server-Sent Events (SSE) 格式接收流式响应
+     * 每次收到新的内容片段时，会调用 chunkConsumer
+     *
+     * @param prompt        提示词对象
+     * @param chunkConsumer 内容片段消费者
+     */
+    @Override
+    public void stream(Prompt prompt, Consumer<String> chunkConsumer) {
+        HttpURLConnection connection = null;
+        BufferedReader reader = null;
+        
+        try {
+            // 1. 构建请求体（开启流式模式）
+            JSONObject requestBody = buildRequestBody(prompt);
+            requestBody.set("stream", true);  // 开启流式响应
+            byte[] requestBodyBytes = requestBody.toString().getBytes(StandardCharsets.UTF_8);
+
+            // 2. 创建 HTTP 连接
+            URL url = new URL(API_URL);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+            connection.setRequestProperty("Content-Type", "application/json");
+            connection.setRequestProperty("Accept", "text/event-stream");  // SSE 格式
+            connection.setDoOutput(true);
+            connection.setConnectTimeout(30000);
+            connection.setReadTimeout(60000);
+
+            // 3. 发送请求体
+            try (OutputStream os = connection.getOutputStream()) {
+                os.write(requestBodyBytes);
+                os.flush();
+            }
+
+            // 4. 检查响应状态
+            int responseCode = connection.getResponseCode();
+            if (responseCode != 200) {
+                throw new RuntimeException("DeepSeek API call failed: " + responseCode);
+            }
+
+            // 5. 实时读取流式响应
+            reader = new BufferedReader(new InputStreamReader(
+                    connection.getInputStream(), StandardCharsets.UTF_8));
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                // 跳过空行和注释
+                if (line.trim().isEmpty() || line.startsWith(":")) {
+                    continue;
+                }
+
+                // 解析 data: 开头的行
+                if (line.startsWith("data: ")) {
+                    String data = line.substring(6).trim();
+
+                    // 结束标记
+                    if ("[DONE]".equals(data)) {
+                        break;
+                    }
+
+                    // 解析 JSON 并提取 content
+                    try {
+                        JSONObject json = JSONUtil.parseObj(data);
+                        JSONArray choices = json.getJSONArray("choices");
+
+                        if (choices != null && !choices.isEmpty()) {
+                            JSONObject choice = choices.getJSONObject(0);
+                            JSONObject delta = choice.getJSONObject("delta");
+
+                            if (delta != null && delta.containsKey("content")) {
+                                String content = delta.getStr("content");
+                                if (content != null && !content.isEmpty()) {
+                                    // 实时回调消费者
+                                    chunkConsumer.accept(content);
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // 忽略单个片段解析错误，继续处理下一个
+                        System.err.println("Failed to parse stream chunk: " + data);
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to call DeepSeek streaming API", e);
+        } finally {
+            // 关闭资源
+            try {
+                if (reader != null) {
+                    reader.close();
+                }
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            } catch (Exception e) {
+                // 忽略关闭错误
+            }
+        }
+    }
+
 }

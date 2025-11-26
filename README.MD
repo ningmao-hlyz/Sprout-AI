@@ -5225,6 +5225,72 @@ public void testCallWithSystemMessage() {
 }
 ```
 
+### AI流式响应
+
+> 代码分支： stream-chat
+
+流式响应（Streaming Response）是现代 AI 应用的标配功能，它允许 AI 模型**逐字逐句**地返回生成内容，而不是等待完整响应后一次性返回。
+
+主要就是创建这个新接口，模型去实现它
+
+```java
+public interface StreamingChatModel extends ChatModel {
+    /**
+     * 流式调用 AI
+     * 
+     * @param prompt 提示词
+     * @param chunkConsumer 内容片段消费者（每次AI生成新内容时调用）
+     */
+    void stream(Prompt prompt, Consumer<String> chunkConsumer);
+    
+    /**
+     * 简化版本
+     */
+    default void stream(String message, Consumer<String> chunkConsumer);
+}
+```
+测试
+
+```java
+/**
+ * 测试基本的流式响应
+ */
+@Test
+public void testBasicStreaming() {
+    // 1. 从 Spring 容器获取 ChatModel
+    ClassPathXmlApplicationContext context =
+            new ClassPathXmlApplicationContext("classpath:ai-config.xml");
+    StreamingChatModel chatModel = context.getBean("chatModel", StreamingChatModel.class);
+    System.out.println("===== 开始流式响应 =====");
+    System.out.print("AI: ");
+    // 2. 流式调用，逐字输出
+    chatModel.stream("请用200个字介绍Spring IoC 容器", chunk -> {
+        System.out.print(chunk);  // 逐字打印
+    });
+    System.out.println("\n===== 流式响应结束 =====");
+}
+/**
+ * 测试带系统提示词的流式响应
+ */
+@Test
+public void testStreamingWithSystemMessage() {
+    ClassPathXmlApplicationContext context =
+            new ClassPathXmlApplicationContext("classpath:ai-config.xml");
+    StreamingChatModel chatModel = context.getBean("chatModel", StreamingChatModel.class);
+    System.out.println("===== 开始流式响应（带系统提示词）=====");
+    System.out.print("AI: ");
+    // 创建带系统提示词的 Prompt
+    Prompt prompt = new Prompt(
+            new SystemMessage("你是一个诗人，请用优美的语言回答"),
+            new UserMessage("描述一下春天")
+    );
+    chatModel.stream(prompt, chunk -> {
+        System.out.print(chunk);
+    });
+    System.out.println("\n===== 流式响应结束 =====");
+}
+```
+
 # 其他
 
 - 微信：ningmaohlyz
