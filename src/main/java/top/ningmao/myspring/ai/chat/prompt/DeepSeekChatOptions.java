@@ -1,6 +1,7 @@
 package top.ningmao.myspring.ai.chat.prompt;
 
 import top.ningmao.myspring.ai.model.function.ToolCallback;
+import top.ningmao.myspring.ai.model.function.ToolScanner;
 
 import java.util.List;
 
@@ -176,6 +177,17 @@ public class DeepSeekChatOptions implements ChatOptions {
 
         public Builder tools(List<ToolCallback> tools) {
             options.tools = tools;
+            return this;
+        }
+
+        /**
+         * 从类中扫描 @Tool 方法并添加为工具
+         * 
+         * @param toolClasses 包含 @Tool 方法的类
+         * @return Builder
+         */
+        public Builder tools(Class<?>... toolClasses) {
+            options.tools = ToolScanner.scanClasses(toolClasses);
             return this;
         }
 

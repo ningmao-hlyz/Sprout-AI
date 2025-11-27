@@ -4484,6 +4484,8 @@ public void testAutoProxy() throws Exception {
 
 **输出结果:** 与编程方式完全一致，证明多切面已成功融入 Bean 的自动化生命周期管理。
 
+---
+
 # AI
 
 ## Chat
@@ -4521,6 +4523,9 @@ public void testMockChatModel() {
     System.out.println("AI回复: " + response);  
 }
 ```
+
+---
+
 
 ### 聊天消息类型实现
 
@@ -4603,6 +4608,9 @@ public void testMessageWithMetadata() {
     assertThat(message.getMetadata().get("source")).isEqualTo("test");
 }
 ```
+
+---
+
 
 ### Prompt 实现
 
@@ -4712,6 +4720,8 @@ public void testPromptFromMultipleMessages() {
     System.out.println("Prompt with system message: " + prompt);
 }
 ```
+
+---
 
 ### ChatModel实现，结构化，高扩展
 
@@ -4899,6 +4909,9 @@ public void testChatResponseGeneration() {
 **2. 模板方法模式** - `ModelResult` 定义抽象方法，`Generation` 实现细节。（通过泛形和抽象来实现模版模式）
 
 **3. 策略模式** - `ChatModel` 接口，不同 AI 提供商实现不同策略
+
+---
+
 
 ### 接入模型DeepSeek
 
@@ -5225,6 +5238,8 @@ public void testCallWithSystemMessage() {
 }
 ```
 
+---
+
 ### AI流式响应
 
 > 代码分支： stream-chat
@@ -5290,6 +5305,8 @@ public void testStreamingWithSystemMessage() {
     System.out.println("\n===== 流式响应结束 =====");
 }
 ```
+
+---
 
 ### Function Calling（AI 工具调用）
 
@@ -5406,6 +5423,79 @@ public void testFunctionCalling() {
     // 输出：根据最新气象数据，北京今天晴天，温度3-12°C，空气质量良好
 }
 ```
+
+---
+
+
+### 简化版 Function Calling
+
+> 代码分支: chat-simplified-function-calling
+
+
+上面的方式需要手动创建 `MethodToolCallback`，比较繁琐，参考springAI源码发现它是传类的。
+
+
+引入 **ToolScanner** 工具扫描器，支持**直接传入类**，自动扫描所有 `@Tool` 方法。
+
+**ToolScanner 工具扫描器**
+
+```java
+/**
+ * 用来扫描类的 @Tool 注解
+ */
+public class ToolScanner {
+    /**
+     * 扫描多个类中的所有 @Tool 方法
+     */
+    public static List<ToolCallback> scanClasses(Class<?>... classes) {
+        // 自动扫描并转换为 ToolCallback
+    }
+    
+    /**
+     * 扫描单个类
+     */
+    public static List<ToolCallback> scanClass(Class<?> clazz) {
+        // 自动实例化类，扫描所有 @Tool 方法
+    }
+}
+```
+
+
+**定义工具类**（与之前一样）
+
+```java
+public class WeatherTools {
+    
+    @Tool(description = "查询指定城市的天气情况")
+    public String getWeather(
+        @ToolParam(description = "城市名称") String city
+    ) {
+        return city + "今天晴天，温度3-12°C，空气质量良好";
+    }
+}
+```
+
+**使用工具（简化版）**
+测试：
+```java
+@Test
+public void testSimplifiedAPI() {
+    // 1. 获取 ChatModel
+    ChatModel chatModel = context.getBean("chatModel", ChatModel.class);
+    
+    // 2. 使用简化 API - 直接传入类
+    DeepSeekChatOptions options = DeepSeekChatOptions.builder()
+            .tools(WeatherTools.class)  // ← 一行搞定！
+            .build();
+    
+    // 3. AI 自动调用工具
+    Prompt prompt = new Prompt("北京今天天气怎么样？", options);
+    String response = chatModel.call(prompt).getOutput();
+    
+    System.out.println(response);
+}
+```
+
 
 
 
