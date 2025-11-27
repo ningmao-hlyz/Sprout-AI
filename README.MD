@@ -5496,7 +5496,103 @@ public void testSimplifiedAPI() {
 }
 ```
 
+---
 
+### Prompt Template（提示词模板）
+
+> 代码分支： chat-prompt-template
+
+**Prompt Template** 允许你定义带有变量占位符的模板字符串，然后用特定值渲染模板，让提示词管理更加灵活和可维护。
+
+**核心特性**
+
+- **占位符替换** - 使用 `{variable}` 语法定义变量
+- **自定义分隔符** - 支持自定义占位符语法（如 `<variable>`）
+- **多种创建方式** - 支持字符串、Message、Prompt 多种输出
+- **Builder 模式** - 链式调用，配置灵活
+
+实现位于 `top.ningmao.myspring.ai.chat.prompt.template`
+
+#### 基本使用
+
+**1. 简单占位符替换**
+
+```java
+PromptTemplate template = new PromptTemplate("Tell me a {adjective} joke about {topic}");
+String result = template.render(Map.of(
+    "adjective", "funny",
+    "topic", "programming"
+));
+// 结果: Tell me a funny joke about programming
+```
+
+**2. 创建 Prompt 对象**
+
+```java
+PromptTemplate promptTemplate = new PromptTemplate("Tell me a {adjective} joke about {topic}");
+Prompt prompt = promptTemplate.create(Map.of(
+    "adjective", "funny", 
+    "topic", "Java"
+));
+
+// 直接传给 ChatModel
+ChatResponse response = chatModel.call(prompt);
+```
+
+**3. 自定义分隔符**
+
+```java
+// 使用 <> 替代 {} 避免与 JSON 冲突
+PromptTemplate template = PromptTemplate.builder()
+    .renderer(DefaultTemplateRenderer.builder()
+        .startDelimiterToken('<')
+        .endDelimiterToken('>')
+        .build())
+    .template("Tell me about <topic>")
+    .build();
+
+String result = template.render(Map.of("topic", "AI"));
+```
+
+**4. SystemPromptTemplate**
+
+```java
+String systemText = """
+    You are a helpful AI assistant.
+    Your name is {name}
+    You should reply in the style of a {voice}.
+    """;
+
+SystemPromptTemplate systemTemplate = new SystemPromptTemplate(systemText);
+Message systemMessage = systemTemplate.createMessage(Map.of(
+    "name", "Sprout AI",
+    "voice", "friendly"
+));
+
+// 组合用户消息和系统消息
+Message userMessage = new UserMessage("Tell me about Spring");
+Prompt prompt = new Prompt(List.of(userMessage, systemMessage));
+```
+
+测试：
+```java
+@Test
+public void testIntegrationWithChatModel() {
+    ChatModel chatModel = context.getBean("chatModel", ChatModel.class);
+    
+    // 使用 PromptTemplate
+    PromptTemplate promptTemplate = new PromptTemplate(
+        "Tell me a {adjective} joke about {topic}"
+    );
+    Prompt prompt = promptTemplate.create(Map.of(
+        "adjective", "funny",
+        "topic", "programming"
+    ));
+    
+    String response = chatModel.call(prompt).getOutput();
+    // AI 回复: Why do programmers prefer dark mode? Because the light attracts bugs!
+}
+```
 
 
 
