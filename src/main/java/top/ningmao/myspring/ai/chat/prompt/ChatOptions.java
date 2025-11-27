@@ -1,7 +1,9 @@
 package top.ningmao.myspring.ai.chat.prompt;
 
 import top.ningmao.myspring.ai.model.ModelOptions;
+import top.ningmao.myspring.ai.model.function.ToolCallback;
 
+import java.util.List;
 
 /**
  * ChatOptions - 聊天模型的配置选项接口
@@ -41,6 +43,14 @@ public interface ChatOptions extends ModelOptions {
      * 获取存在惩罚 (-2.0 - 2.0)
      */
     Float getPresencePenalty();
+
+    /**
+     * 获取工具列表
+     * Function Calling 支持
+     */
+    default List<ToolCallback> getTools() {
+        return null;
+    }
 
     /**
      * 复制当前配置

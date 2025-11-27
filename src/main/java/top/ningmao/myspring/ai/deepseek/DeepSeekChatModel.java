@@ -7,12 +7,14 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import top.ningmao.myspring.ai.chat.messages.AssistantMessage;
 import top.ningmao.myspring.ai.chat.messages.Message;
+import top.ningmao.myspring.ai.chat.messages.UserMessage;
 import top.ningmao.myspring.ai.chat.model.ChatResponse;
 import top.ningmao.myspring.ai.chat.model.Generation;
 import top.ningmao.myspring.ai.chat.model.StreamingChatModel;
 import top.ningmao.myspring.ai.chat.prompt.ChatOptions;
 import top.ningmao.myspring.ai.chat.prompt.DeepSeekChatOptions;
 import top.ningmao.myspring.ai.chat.prompt.Prompt;
+import top.ningmao.myspring.ai.model.function.ToolCallback;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -66,6 +68,21 @@ public class DeepSeekChatModel implements StreamingChatModel {
 
     @Override
     public ChatResponse call(Prompt prompt) {
+        ChatOptions options = prompt.getOptions() != null ? prompt.getOptions() : defaultOptions;
+        
+        // 如果没有工具，直接调用
+        if (options.getTools() == null || options.getTools().isEmpty()) {
+            return callWithoutTools(prompt);
+        }
+        
+        // 有工具时，处理工具调用循环
+        return callWithTools(prompt, options);
+    }
+
+    /**
+     * 不带工具的普通调用
+     */
+    private ChatResponse callWithoutTools(Prompt prompt) {
         try {
             // 1. 构建请求体
             JSONObject requestBody = buildRequestBody(prompt);
@@ -90,6 +107,99 @@ public class DeepSeekChatModel implements StreamingChatModel {
         } catch (Exception e) {
             throw new RuntimeException("Failed to call DeepSeek API", e);
         }
+    }
+
+    /**
+     * 带工具的调用（支持 Function Calling）
+     */
+    private ChatResponse callWithTools(Prompt prompt, ChatOptions options) {
+        try {
+            // 复制消息列表，用于累积对话历史
+            List<Message> messages = new ArrayList<>(prompt.getMessages());
+            
+            // 最多尝试 5 次工具调用（防止无限循环）
+            int maxIterations = 5;
+            for (int i = 0; i < maxIterations; i++) {
+                // 1. 构建新的 Prompt
+                Prompt currentPrompt = new Prompt(messages, prompt.getOptions());
+                
+                // 2. 调用 API
+                JSONObject requestBody = buildRequestBody(currentPrompt);
+                HttpResponse response = HttpRequest.post(API_URL)
+                        .header("Authorization", "Bearer " + apiKey)
+                        .header("Content-Type", "application/json")
+                        .body(requestBody.toString())
+                        .timeout(30000)
+                        .execute();
+
+                if (!response.isOk()) {
+                    throw new RuntimeException("DeepSeek API call failed: " + response.getStatus());
+                }
+
+                // 3. 解析响应
+                JSONObject jsonResponse = JSONUtil.parseObj(response.body());
+                JSONArray choices = jsonResponse.getJSONArray("choices");
+                JSONObject choice = choices.getJSONObject(0);
+                JSONObject message = choice.getJSONObject("message");
+                
+                // 4. 检查是否有工具调用请求
+                if (message.containsKey("tool_calls") && message.getJSONArray("tool_calls") != null) {
+                    // AI 请求调用工具
+                    JSONArray toolCalls = message.getJSONArray("tool_calls");
+                    
+                    // 将 AI 的消息添加到历史（包含工具调用请求）
+                    messages.add(new AssistantMessage("Tool calls: " + toolCalls.toString()));
+                    
+                    // 执行所有工具调用
+                    for (int j = 0; j < toolCalls.size(); j++) {
+                        JSONObject toolCall = toolCalls.getJSONObject(j);
+                        JSONObject function = toolCall.getJSONObject("function");
+                        String toolName = function.getStr("name");
+                        String toolArgs = function.getStr("arguments");
+                        
+                        // 找到对应的工具
+                        ToolCallback tool = findTool(options.getTools(), toolName);
+                        if (tool == null) {
+                            throw new RuntimeException("Tool not found: " + toolName);
+                        }
+                        
+                        // 执行工具
+                        String toolResult = tool.call(toolArgs);
+                        
+                        // 将工具结果添加到消息历史
+                        messages.add(new UserMessage("Tool result for " + toolName + ": " + toolResult));
+                    }
+                    
+                    // 继续循环，让 AI 使用工具结果生成最终响应
+                    continue;
+                }
+                
+                // 5. 没有工具调用，返回最终响应
+                String content = message.getStr("content");
+                AssistantMessage assistantMessage = new AssistantMessage(content);
+                Generation generation = new Generation(assistantMessage);
+                List<Generation> generations = new ArrayList<>();
+                generations.add(generation);
+                return new ChatResponse(generations);
+            }
+            
+            throw new RuntimeException("Tool calling exceeded maximum iterations");
+            
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to call DeepSeek API with tools", e);
+        }
+    }
+
+    /**
+     * 查找工具
+     */
+    private ToolCallback findTool(List<ToolCallback> tools, String toolName) {
+        for (ToolCallback tool : tools) {
+            if (tool.getName().equals(toolName)) {
+                return tool;
+            }
+        }
+        return null;
     }
 
     /**
@@ -129,6 +239,24 @@ public class DeepSeekChatModel implements StreamingChatModel {
             messages.add(msg);
         }
         requestBody.set("messages", messages);
+
+        // 添加工具定义（Function Calling 支持）
+        if (options.getTools() != null && !options.getTools().isEmpty()) {
+            JSONArray tools = new JSONArray();
+            for (ToolCallback tool : options.getTools()) {
+                JSONObject toolDef = new JSONObject();
+                toolDef.set("type", "function");
+                
+                JSONObject function = new JSONObject();
+                function.set("name", tool.getToolDefinition().name());
+                function.set("description", tool.getToolDefinition().description());
+                function.set("parameters", JSONUtil.parseObj(tool.getToolDefinition().inputSchema()));
+                
+                toolDef.set("function", function);
+                tools.add(toolDef);
+            }
+            requestBody.set("tools", tools);
+        }
 
         return requestBody;
     }

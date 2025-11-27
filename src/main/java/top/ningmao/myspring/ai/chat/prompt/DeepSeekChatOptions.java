@@ -1,5 +1,8 @@
 package top.ningmao.myspring.ai.chat.prompt;
 
+import top.ningmao.myspring.ai.model.function.ToolCallback;
+
+import java.util.List;
 
 /**
  * DeepSeek 聊天配置选项
@@ -42,6 +45,11 @@ public class DeepSeekChatOptions implements ChatOptions {
      * 正值会根据新 token 是否出现在文本中对其进行惩罚
      */
     private Float presencePenalty = 0.0f;
+
+    /**
+     * 工具列表（Function Calling 支持）
+     */
+    private List<ToolCallback> tools;
 
     public DeepSeekChatOptions() {
     }
@@ -109,6 +117,15 @@ public class DeepSeekChatOptions implements ChatOptions {
     }
 
     @Override
+    public List<ToolCallback> getTools() {
+        return tools;
+    }
+
+    public void setTools(List<ToolCallback> tools) {
+        this.tools = tools;
+    }
+
+    @Override
     public ChatOptions copy() {
         DeepSeekChatOptions copy = new DeepSeekChatOptions();
         copy.model = this.model;
@@ -117,6 +134,7 @@ public class DeepSeekChatOptions implements ChatOptions {
         copy.topP = this.topP;
         copy.frequencyPenalty = this.frequencyPenalty;
         copy.presencePenalty = this.presencePenalty;
+        copy.tools = this.tools;
         return copy;
     }
 
@@ -156,6 +174,11 @@ public class DeepSeekChatOptions implements ChatOptions {
             return this;
         }
 
+        public Builder tools(List<ToolCallback> tools) {
+            options.tools = tools;
+            return this;
+        }
+
         public DeepSeekChatOptions build() {
             return options;
         }
@@ -170,6 +193,7 @@ public class DeepSeekChatOptions implements ChatOptions {
                 ", topP=" + topP +
                 ", frequencyPenalty=" + frequencyPenalty +
                 ", presencePenalty=" + presencePenalty +
+                ", tools=" + (tools != null ? tools.size() + " tools" : "null") +
                 '}';
     }
 }

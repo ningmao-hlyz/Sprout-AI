@@ -5291,6 +5291,126 @@ public void testStreamingWithSystemMessage() {
 }
 ```
 
+### Function Calling（AI 工具调用）
+
+> 代码分支： chat-function-calling
+
+**Function Calling** 是 AI 应用的核心能力之一，它让 AI 能够**自动调用外部工具**来获取实时信息或执行特定操作。
+
+
+-  **@Tool 注解** - 只需一个注解就能将方法变成可调用的工具
+-  **自动参数解析** - 从 JSON 自动转换为 Java 方法参数
+-  **JSON Schema 生成** - 自动生成工具的输入参数描述
+-  **工具调用循环** - AI 自动决定何时调用、何时停止
+-  **多工具支持** - AI 从多个工具中智能选择
+-  **完全符合 Spring AI 标准** - 接口和行为与官方一致
+
+![tool-call.png](assets/tool-call.png)
+
+#### 实现步骤
+
+**1. 工具定义接口**
+
+```java
+// ToolCallback - 工具回调接口
+public interface ToolCallback {
+    ToolDefinition getToolDefinition();
+    String call(String toolInput);
+    default String getName() { 
+        return getToolDefinition().name(); 
+    }
+}
+
+// ToolDefinition - 工具定义（名称、描述、JSON Schema）
+public class ToolDefinition {
+    private final String name;
+    private final String description;
+    private final String inputSchema;  // JSON Schema 格式
+}
+```
+
+**2. 注解驱动**
+
+```java
+// @Tool - 标记方法为可调用工具
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Tool {
+    String name() default "";
+    String description();  // AI 用此理解何时调用
+}
+
+// @ToolParam - 参数描述
+@Target(ElementType.PARAMETER)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface ToolParam {
+    String description();
+    boolean required() default true;
+}
+```
+
+**3. 自动实现**
+
+```java
+// MethodToolCallback - 将 @Tool 方法转换为工具
+public class MethodToolCallback implements ToolCallback {
+    private final Object target;
+    private final Method method;
+    
+    // 自动生成 JSON Schema
+    // 自动解析参数并调用
+    // 自动转换返回值
+}
+```
+
+#### 使用示例
+
+**定义工具**
+
+```java
+public class WeatherTools {
+    
+    @Tool(description = "查询指定城市的天气情况")
+    public String getWeather(
+        @ToolParam(description = "城市名称") String city
+    ) {
+        // 模拟天气查询
+        return city + "今天晴天，温度3-12°C，空气质量良好";
+    }
+}
+```
+
+**使用工具**
+测试：
+```java
+@Test
+public void testFunctionCalling() {
+    // 1. 获取 ChatModel
+    ChatModel chatModel = context.getBean("chatModel", ChatModel.class);
+    
+    // 2. 创建工具
+    WeatherTools tools = new WeatherTools();
+    Method method = WeatherTools.class.getMethod("getWeather", String.class);
+    ToolCallback tool = new MethodToolCallback(tools, method);
+    
+    // 3. 配置工具
+    DeepSeekChatOptions options = DeepSeekChatOptions.builder()
+            .tools(List.of(tool))
+            .build();
+    
+    // 4. AI 自动调用工具
+    Prompt prompt = new Prompt("北京今天天气怎么样？", options);
+    String response = chatModel.call(prompt).getOutput();
+    
+    System.out.println(response);
+    // 输出：根据最新气象数据，北京今天晴天，温度3-12°C，空气质量良好
+}
+```
+
+
+
+
+
 # 其他
 
 - 微信：ningmaohlyz
