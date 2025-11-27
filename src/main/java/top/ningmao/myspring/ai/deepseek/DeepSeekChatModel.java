@@ -7,13 +7,14 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import top.ningmao.myspring.ai.chat.messages.AssistantMessage;
 import top.ningmao.myspring.ai.chat.messages.Message;
-import top.ningmao.myspring.ai.chat.messages.UserMessage;
+import top.ningmao.myspring.ai.chat.messages.ToolMessage;
 import top.ningmao.myspring.ai.chat.model.ChatResponse;
 import top.ningmao.myspring.ai.chat.model.Generation;
 import top.ningmao.myspring.ai.chat.model.StreamingChatModel;
 import top.ningmao.myspring.ai.chat.prompt.ChatOptions;
 import top.ningmao.myspring.ai.chat.prompt.DeepSeekChatOptions;
 import top.ningmao.myspring.ai.chat.prompt.Prompt;
+import top.ningmao.myspring.ai.model.ToolCall;
 import top.ningmao.myspring.ai.model.function.ToolCallback;
 
 import java.io.BufferedReader;
@@ -23,7 +24,9 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 
@@ -92,7 +95,7 @@ public class DeepSeekChatModel implements StreamingChatModel {
                     .header("Authorization", "Bearer " + apiKey)
                     .header("Content-Type", "application/json")
                     .body(requestBody.toString())
-                    .timeout(30000)  // 30秒超时
+                    .timeout(60000)  // 30秒超时
                     .execute();
 
             // 3. 检查响应状态
@@ -145,29 +148,34 @@ public class DeepSeekChatModel implements StreamingChatModel {
                 // 4. 检查是否有工具调用请求
                 if (message.containsKey("tool_calls") && message.getJSONArray("tool_calls") != null) {
                     // AI 请求调用工具
-                    JSONArray toolCalls = message.getJSONArray("tool_calls");
+                    JSONArray toolCallsJson = message.getJSONArray("tool_calls");
+                    
+                    // 将 JSON 转换为 ToolCall 对象列表
+                    List<ToolCall> toolCalls = new ArrayList<>();
+                    for (int j = 0; j < toolCallsJson.size(); j++) {
+                        JSONObject toolCallJson = toolCallsJson.getJSONObject(j);
+                        JSONObject function = toolCallJson.getJSONObject("function");
+                        
+                        ToolCall toolCall = new ToolCall(
+                            toolCallJson.getStr("id"),
+                            toolCallJson.getStr("type"),
+                            function.getStr("name"),
+                            function.getStr("arguments")
+                        );
+                        toolCalls.add(toolCall);
+                    }
                     
                     // 将 AI 的消息添加到历史（包含工具调用请求）
-                    messages.add(new AssistantMessage("Tool calls: " + toolCalls.toString()));
+                    String assistantContent = message.getStr("content");
+                    if (assistantContent == null || assistantContent.isEmpty()) {
+                        assistantContent = "";  // 工具调用时 content 可能为空
+                    }
+                    messages.add(new AssistantMessage(assistantContent, toolCalls));
                     
-                    // 执行所有工具调用
-                    for (int j = 0; j < toolCalls.size(); j++) {
-                        JSONObject toolCall = toolCalls.getJSONObject(j);
-                        JSONObject function = toolCall.getJSONObject("function");
-                        String toolName = function.getStr("name");
-                        String toolArgs = function.getStr("arguments");
-                        
-                        // 找到对应的工具
-                        ToolCallback tool = findTool(options.getTools(), toolName);
-                        if (tool == null) {
-                            throw new RuntimeException("Tool not found: " + toolName);
-                        }
-                        
-                        // 执行工具
-                        String toolResult = tool.call(toolArgs);
-                        
-                        // 将工具结果添加到消息历史
-                        messages.add(new UserMessage("Tool result for " + toolName + ": " + toolResult));
+                    // 执行所有工具调用并添加结果
+                    for (ToolCall toolCall : toolCalls) {
+                        String toolResult = executeToolCall(toolCall, options.getTools());
+                        messages.add(new ToolMessage(toolCall.id(), toolResult));
                     }
                     
                     // 继续循环，让 AI 使用工具结果生成最终响应
@@ -236,6 +244,34 @@ public class DeepSeekChatModel implements StreamingChatModel {
             JSONObject msg = new JSONObject();
             msg.set("role", message.getMessageType().getValue());
             msg.set("content", message.getContent());
+            
+            // 处理 ToolMessage 的特殊字段
+            if (message instanceof ToolMessage) {
+                ToolMessage toolMsg = (ToolMessage) message;
+                msg.set("tool_call_id", toolMsg.getToolCallId());
+            }
+            
+            // 处理 AssistantMessage 的 tool_calls
+            if (message instanceof AssistantMessage) {
+                AssistantMessage assistantMsg = (AssistantMessage) message;
+                if (assistantMsg.getToolCalls() != null && !assistantMsg.getToolCalls().isEmpty()) {
+                    JSONArray toolCallsArray = new JSONArray();
+                    for (ToolCall toolCall : assistantMsg.getToolCalls()) {
+                        JSONObject toolCallObj = new JSONObject();
+                        toolCallObj.set("id", toolCall.id());
+                        toolCallObj.set("type", toolCall.type());
+                        
+                        JSONObject function = new JSONObject();
+                        function.set("name", toolCall.functionName());
+                        function.set("arguments", toolCall.arguments());
+                        
+                        toolCallObj.set("function", function);
+                        toolCallsArray.add(toolCallObj);
+                    }
+                    msg.set("tool_calls", toolCallsArray);
+                }
+            }
+            
             messages.add(msg);
         }
         requestBody.set("messages", messages);
@@ -333,16 +369,28 @@ public class DeepSeekChatModel implements StreamingChatModel {
     }
 
     /**
-     * 流式调用 DeepSeek API
-     * <p>
-     * 使用 Server-Sent Events (SSE) 格式接收流式响应
-     * 每次收到新的内容片段时，会调用 chunkConsumer
+     * 流式调用 AI 模型（支持 SSE 和 Function Calling）
      *
      * @param prompt        提示词对象
      * @param chunkConsumer 内容片段消费者
      */
     @Override
     public void stream(Prompt prompt, Consumer<String> chunkConsumer) {
+        ChatOptions options = prompt.getOptions() != null ? prompt.getOptions() : defaultOptions;
+        
+        // 如果没有工具，直接流式调用
+        if (options.getTools() == null || options.getTools().isEmpty()) {
+            streamWithoutTools(prompt, chunkConsumer);
+        } else {
+            // 有工具时，处理工具调用循环（流式）
+            streamWithTools(prompt, options, chunkConsumer);
+        }
+    }
+
+    /**
+     * 不带工具的流式调用
+     */
+    private void streamWithoutTools(Prompt prompt, Consumer<String> chunkConsumer) {
         HttpURLConnection connection = null;
         BufferedReader reader = null;
         
@@ -436,4 +484,184 @@ public class DeepSeekChatModel implements StreamingChatModel {
         }
     }
 
+    /**
+     * 带工具的流式调用（支持 Function Calling）
+     */
+    private void streamWithTools(Prompt prompt, ChatOptions options, Consumer<String> chunkConsumer) {
+        try {
+            // 复制消息列表，用于累积对话历史
+            List<Message> messages = new ArrayList<>(prompt.getMessages());
+            
+            // 最多尝试 5 次工具调用（防止无限循环）
+            int maxIterations = 5;
+            for (int i = 0; i < maxIterations; i++) {
+                // 1. 构建新的 Prompt
+                Prompt currentPrompt = new Prompt(messages, prompt.getOptions());
+                
+                // 2. 收集流式响应和工具调用
+                StringBuilder assistantMessage = new StringBuilder();
+                List<ToolCall> toolCalls = new ArrayList<>();
+                Map<Integer, ToolCallBuilder> toolCallBuilders = new HashMap<>();
+                
+                // 3. 进行流式调用并收集数据
+                HttpURLConnection connection = null;
+                BufferedReader reader = null;
+                
+                try {
+                    JSONObject requestBody = buildRequestBody(currentPrompt);
+                    requestBody.set("stream", true);
+                    byte[] requestBodyBytes = requestBody.toString().getBytes(StandardCharsets.UTF_8);
+
+                    URL url = new URL(API_URL);
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setRequestMethod("POST");
+                    connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+                    connection.setRequestProperty("Content-Type", "application/json");
+                    connection.setRequestProperty("Accept", "text/event-stream");
+                    connection.setDoOutput(true);
+                    connection.setConnectTimeout(30000);
+                    connection.setReadTimeout(60000);
+
+                    try (OutputStream os = connection.getOutputStream()) {
+                        os.write(requestBodyBytes);
+                        os.flush();
+                    }
+
+                    int responseCode = connection.getResponseCode();
+                    if (responseCode != 200) {
+                        throw new RuntimeException("DeepSeek API call failed: " + responseCode);
+                    }
+
+                    reader = new BufferedReader(new InputStreamReader(
+                            connection.getInputStream(), StandardCharsets.UTF_8));
+
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.trim().isEmpty() || line.startsWith(":")) {
+                            continue;
+                        }
+
+                        if (line.startsWith("data: ")) {
+                            String data = line.substring(6).trim();
+
+                            if ("[DONE]".equals(data)) {
+                                break;
+                            }
+
+                            try {
+                                JSONObject json = JSONUtil.parseObj(data);
+                                JSONArray choices = json.getJSONArray("choices");
+
+                                if (choices != null && !choices.isEmpty()) {
+                                    JSONObject choice = choices.getJSONObject(0);
+                                    JSONObject delta = choice.getJSONObject("delta");
+
+                                    if (delta != null) {
+                                        // 处理 content
+                                        if (delta.containsKey("content")) {
+                                            String content = delta.getStr("content");
+                                            if (content != null && !content.isEmpty()) {
+                                                assistantMessage.append(content);
+                                                chunkConsumer.accept(content);
+                                            }
+                                        }
+
+                                        // 处理 tool_calls（流式）
+                                        if (delta.containsKey("tool_calls")) {
+                                            JSONArray toolCallsArray = delta.getJSONArray("tool_calls");
+                                            for (int j = 0; j < toolCallsArray.size(); j++) {
+                                                JSONObject toolCallDelta = toolCallsArray.getJSONObject(j);
+                                                int index = toolCallDelta.getInt("index");
+                                                
+                                                ToolCallBuilder builder = toolCallBuilders.computeIfAbsent(
+                                                        index, k -> new ToolCallBuilder());
+
+                                                if (toolCallDelta.containsKey("id")) {
+                                                    builder.id = toolCallDelta.getStr("id");
+                                                }
+                                                if (toolCallDelta.containsKey("type")) {
+                                                    builder.type = toolCallDelta.getStr("type");
+                                                }
+                                                if (toolCallDelta.containsKey("function")) {
+                                                    JSONObject function = toolCallDelta.getJSONObject("function");
+                                                    if (function.containsKey("name")) {
+                                                        builder.functionName = function.getStr("name");
+                                                    }
+                                                    if (function.containsKey("arguments")) {
+                                                        builder.arguments.append(function.getStr("arguments"));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {
+                                System.err.println("Failed to parse stream chunk: " + data);
+                            }
+                        }
+                    }
+                } finally {
+                    if (reader != null) reader.close();
+                    if (connection != null) connection.disconnect();
+                }
+
+                // 4. 如果没有工具调用，结束循环
+                if (toolCallBuilders.isEmpty()) {
+                    break;
+                }
+
+                // 5. 构建工具调用列表
+                for (ToolCallBuilder builder : toolCallBuilders.values()) {
+                    toolCalls.add(new ToolCall(
+                            builder.id,
+                            builder.type,
+                            builder.functionName,
+                            builder.arguments.toString()
+                    ));
+                }
+                
+                // 6. 将 AI 响应（包含工具调用）添加到消息历史
+                messages.add(new AssistantMessage(assistantMessage.toString(), toolCalls));
+                
+                // 7. 执行工具调用
+                for (ToolCall toolCall : toolCalls) {
+                    String toolResult = executeToolCall(toolCall, options.getTools());
+                    messages.add(new ToolMessage(toolCall.id(), toolResult));
+                }
+                
+                // 8. 继续下一轮调用（AI 会基于工具结果生成最终回复）
+            }
+            
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to call DeepSeek streaming API with tools", e);
+        }
+    }
+
+    /**
+     * 执行单个工具调用
+     *
+     * @param toolCall 工具调用
+     * @param tools    可用工具列表
+     * @return 工具执行结果
+     */
+    private String executeToolCall(ToolCall toolCall, List<ToolCallback> tools) {
+        // 找到对应的工具
+        ToolCallback tool = findTool(tools, toolCall.functionName());
+        if (tool == null) {
+            throw new RuntimeException("Tool not found: " + toolCall.functionName());
+        }
+        
+        // 执行工具并返回结果
+        return tool.call(toolCall.arguments());
+    }
+
+    /**
+     * 工具调用构建器（用于累积流式 tool_calls）
+     */
+    private static class ToolCallBuilder {
+        String id;
+        String type = "function";
+        String functionName;
+        StringBuilder arguments = new StringBuilder();
+    }
 }

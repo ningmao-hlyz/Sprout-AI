@@ -5,6 +5,7 @@ import top.ningmao.myspring.ai.chat.messages.SystemMessage;
 import top.ningmao.myspring.ai.chat.messages.UserMessage;
 import top.ningmao.myspring.ai.chat.model.ChatModel;
 import top.ningmao.myspring.ai.chat.model.ChatResponse;
+import top.ningmao.myspring.ai.chat.model.StreamingChatModel;
 import top.ningmao.myspring.ai.chat.prompt.ChatOptions;
 import top.ningmao.myspring.ai.chat.prompt.Prompt;
 import top.ningmao.myspring.ai.chat.prompt.template.DefaultTemplateRenderer;
@@ -216,6 +217,42 @@ public class DefaultChatClient implements ChatClient {
             return new DefaultCallResponseSpec(response);
         }
 
+        @Override
+        public StreamResponseSpec stream() {
+            // 构建 Prompt（与 call() 方法相同的逻辑）
+            Prompt prompt;
+            if (existingPrompt != null) {
+                prompt = existingPrompt;
+            } else {
+                List<Message> promptMessages = new ArrayList<>();
+
+                // 添加系统消息
+                if (systemText != null && !systemText.isBlank()) {
+                    String renderedSystemText = templateRenderer.apply(systemText, systemParams);
+                    promptMessages.add(new SystemMessage(renderedSystemText));
+                }
+
+                // 添加用户消息
+                if (userText != null && !userText.isBlank()) {
+                    String renderedUserText = templateRenderer.apply(userText, userParams);
+                    promptMessages.add(new UserMessage(renderedUserText));
+                }
+
+                // 添加其他消息
+                promptMessages.addAll(messages);
+
+                prompt = new Prompt(promptMessages, chatOptions);
+            }
+
+            // 检查 ChatModel 是否支持流式
+            if (!(chatModel instanceof StreamingChatModel)) {
+                throw new UnsupportedOperationException(
+                        "The ChatModel does not support streaming. Please use a StreamingChatModel implementation.");
+            }
+
+            return new DefaultStreamResponseSpec((StreamingChatModel) chatModel, prompt);
+        }
+
         /**
          * 默认 UserSpec 实现
          */
@@ -288,6 +325,38 @@ public class DefaultChatClient implements ChatClient {
         @Override
         public ChatResponse chatResponse() {
             return chatResponse;
+        }
+    }
+
+    /**
+     * 默认 StreamResponseSpec 实现
+     */
+    private static class DefaultStreamResponseSpec implements StreamResponseSpec {
+
+        private final StreamingChatModel streamingChatModel;
+        private final Prompt prompt;
+
+        public DefaultStreamResponseSpec(StreamingChatModel streamingChatModel, Prompt prompt) {
+            this.streamingChatModel = streamingChatModel;
+            this.prompt = prompt;
+        }
+
+        @Override
+        public void content(Consumer<String> consumer) {
+            // 调用 StreamingChatModel 的 stream 方法
+            streamingChatModel.stream(prompt, consumer);
+        }
+
+        @Override
+        public void chatResponse(Consumer<ChatResponse> consumer) {
+            // 调用 StreamingChatModel 的 stream 方法，将每个字符串块包装成 ChatResponse
+            streamingChatModel.stream(prompt, chunk -> {
+                // 简单包装：每个chunk作为一个 ChatResponse
+                if (chunk != null && !chunk.isEmpty()) {
+                    ChatResponse response = new ChatResponse(chunk);
+                    consumer.accept(response);
+                }
+            });
         }
     }
 }

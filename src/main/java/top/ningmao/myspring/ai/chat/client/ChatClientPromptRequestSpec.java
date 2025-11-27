@@ -63,6 +63,13 @@ public interface ChatClientPromptRequestSpec {
     CallResponseSpec call();
 
     /**
+     * 流式调用 AI 模型
+     *
+     * @return StreamResponseSpec
+     */
+    StreamResponseSpec stream();
+
+    /**
      * 用户消息配置规范
      */
     interface UserSpec {

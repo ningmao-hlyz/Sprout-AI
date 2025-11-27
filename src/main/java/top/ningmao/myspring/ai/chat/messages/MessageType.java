@@ -26,7 +26,13 @@ public enum MessageType {
      * AI 助手消息 - AI 的回复
      * 代表 AI 模型生成的响应
      */
-    ASSISTANT("assistant");
+    ASSISTANT("assistant"),
+
+    /**
+     * 工具消息 - 工具调用的结果
+     * 代表工具执行后返回的结果
+     */
+    TOOL("tool");
 
     private final String value;
 

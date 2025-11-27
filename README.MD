@@ -5744,6 +5744,154 @@ public void testDefaultSystemMessage() {
 }
 ```
 
+---
+
+### 完善Stream 流式输出
+
+> 代码分支：extend-chat-stream
+
+关键实现：在 ChatClient 中增加 `stream()` 方法返回 StreamResponseSpec，通过 Consumer 回调逐块接收内容。流式输出同时支持普通文本和 Function Calling，在工具调用场景下自动累积 tool_calls 并执行。
+
+SpringAI 使用的是Flux，这里用consumer，简化实现，功能是等价的，不必在意
+
+核心代码：
+
+```java
+@Override
+public void stream(Prompt prompt, Consumer<String> chunkConsumer) {
+    ChatOptions options = prompt.getOptions() != null ? prompt.getOptions() : defaultOptions;
+    
+    // 无工具时直接流式调用
+    if (options.getTools() == null || options.getTools().isEmpty()) {
+        streamWithoutTools(prompt, chunkConsumer);
+    } else {
+        // 有工具时处理多轮对话
+        streamWithTools(prompt, options, chunkConsumer);
+    }
+}
+
+private void streamWithTools(Prompt prompt, ChatOptions options, Consumer<String> chunkConsumer) {
+    List<Message> messages = new ArrayList<>(prompt.getMessages());
+    
+    for (int iteration = 0; iteration < 5; iteration++) {
+        // 1. 构建请求并流式调用
+        JSONObject requestBody = buildRequestBody(new Prompt(messages, prompt.getOptions()));
+        HttpURLConnection connection = (HttpURLConnection) new URL(API_URL).openConnection();
+        
+        // 2. 读取 SSE 流，累积 tool_calls
+        Map<Integer, ToolCallBuilder> toolCallBuilders = new HashMap<>();
+        StringBuilder assistantMessage = new StringBuilder();
+        
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.startsWith("data: ")) {
+                    JSONObject delta = JSONUtil.parseObj(line.substring(6));
+                    
+                    // 处理内容片段
+                    if (delta.containsKey("content")) {
+                        String content = delta.getStr("content");
+                        assistantMessage.append(content);
+                        chunkConsumer.accept(content);
+                    }
+                    
+                    // 处理 tool_calls 增量
+                    if (delta.containsKey("tool_calls")) {
+                        JSONArray toolCallsArray = delta.getJSONArray("tool_calls");
+                        for (int i = 0; i < toolCallsArray.size(); i++) {
+                            JSONObject toolCallDelta = toolCallsArray.getJSONObject(i);
+                            int index = toolCallDelta.getInt("index");
+                            
+                            ToolCallBuilder builder = toolCallBuilders.computeIfAbsent(index, 
+                                k -> new ToolCallBuilder());
+                            
+                            if (toolCallDelta.containsKey("id")) {
+                                builder.id = toolCallDelta.getStr("id");
+                            }
+                            if (toolCallDelta.containsKey("function")) {
+                                JSONObject func = toolCallDelta.getJSONObject("function");
+                                if (func.containsKey("name")) {
+                                    builder.functionName = func.getStr("name");
+                                }
+                                if (func.containsKey("arguments")) {
+                                    builder.arguments.append(func.getStr("arguments"));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 3. 如果没有工具调用，返回
+        if (toolCallBuilders.isEmpty()) {
+            return;
+        }
+        
+        // 4. 构建 ToolCall 对象
+        List<ToolCall> toolCalls = new ArrayList<>();
+        for (ToolCallBuilder builder : toolCallBuilders.values()) {
+            toolCalls.add(new ToolCall(builder.id, builder.type, 
+                builder.functionName, builder.arguments.toString()));
+        }
+        
+        // 5. 保存 AssistantMessage 和执行工具
+        messages.add(new AssistantMessage(assistantMessage.toString(), toolCalls));
+        
+        for (ToolCall toolCall : toolCalls) {
+            String toolResult = executeToolCall(toolCall, options.getTools());
+            messages.add(new ToolMessage(toolCall.id(), toolResult));
+        }
+        
+        // 6. 继续下一轮流式调用
+    }
+}
+
+private static class ToolCallBuilder {
+    String id;
+    String type = "function";
+    String functionName;
+    StringBuilder arguments = new StringBuilder();
+}
+```
+
+测试：
+
+```java
+@Test
+public void testStreamWithFunctionCalling() {
+    System.out.println("===== 流式输出 + Function Calling 测试 =====\n");
+    
+    StringBuilder fullResponse = new StringBuilder();
+    
+    // 配置工具
+    DeepSeekChatOptions options = DeepSeekChatOptions.builder()
+            .tools(WeatherTools.class)
+            .build();
+    
+    chatClient.prompt()
+            .user("北京今天天气怎么样？")
+            .options(options)
+            .stream()
+            .content(chunk -> {
+                System.out.print(chunk);
+                fullResponse.append(chunk);
+            });
+    
+    System.out.println("\n\n完整响应: " + fullResponse);
+    assertThat(fullResponse.toString()).containsAnyOf("晴天", "天气", "温度");
+    
+    System.out.println("\n===== 测试完成 =====");
+}
+
+// 输出：
+// 我来帮您查询北京今天的天气情况。根据查询结果，北京今天天气情况如下：
+// - **天气状况**：晴天 ☀️
+// - **温度范围**：3°C 到 12°C
+// - **空气质量**：良好
+```
+
+---
 
 # 其他
 
