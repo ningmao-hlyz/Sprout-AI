@@ -4,7 +4,8 @@ import top.ningmao.myspring.ai.chat.memory.ChatMemory;
 import top.ningmao.myspring.ai.chat.memory.ChatMemoryConstants;
 import top.ningmao.myspring.ai.chat.messages.AssistantMessage;
 import top.ningmao.myspring.ai.chat.messages.Message;
-import top.ningmao.myspring.ai.chat.messages.UserMessage;
+import top.ningmao.myspring.ai.chat.messages.MessageType;
+import top.ningmao.myspring.ai.chat.messages.SystemMessage;
 import top.ningmao.myspring.ai.chat.prompt.Prompt;
 
 import java.util.ArrayList;
@@ -16,8 +17,9 @@ import java.util.Map;
  * MessageChatMemoryAdvisor - 对话历史管理 Advisor
  * </p>
  * 功能：
- * 1. 在请求前：自动添加历史消息到 Prompt
- * 2. 在响应后：保存用户消息和助手响应到 ChatMemory
+ * 1. 在请求前（adviseRequest）：获取历史消息 + 合并到 Prompt + 保存所有新消息（包括工具调用）
+ * 2. 在响应后（adviseResponse）：保存 AI 最终响应
+ * 3. 完整记录：支持 UserMessage、AssistantMessage、ToolMessage 等所有消息类型
  *
  * @author 宁猫
  * @since 2025-11-28 14:59:48
@@ -30,9 +32,6 @@ public class MessageChatMemoryAdvisor implements Advisor {
     private final ChatMemory chatMemory;
     private final String name;
     private final int order;
-    
-    // 使用 ThreadLocal 保存当前请求的上下文
-    private final ThreadLocal<RequestContext> requestContext = new ThreadLocal<>();
 
     /**
      * 构造函数
@@ -67,46 +66,41 @@ public class MessageChatMemoryAdvisor implements Advisor {
         // 3. 获取当前请求的消息
         List<Message> currentMessages = prompt.getMessages();
         
-        // 4. 保存当前用户消息到 ThreadLocal，供 adviseResponse 使用
-        List<Message> userMessages = new ArrayList<>();
+        // 4. 保存所有新消息到历史（除了 SystemMessage）
+        List<Message> newMessages = new ArrayList<>();
         for (Message message : currentMessages) {
-            if (message instanceof UserMessage) {
-                userMessages.add(message);
+            // 过滤掉 SystemMessage（系统消息不保存到历史）
+            if (!(message instanceof SystemMessage)) {
+                // 检查这条消息是否已在历史中（避免重复保存）
+                if (!isMessageInHistory(message, historyMessages)) {
+                    newMessages.add(message);
+                }
             }
         }
+        if (!newMessages.isEmpty()) {
+            chatMemory.add(conversationId, newMessages);
+        }
         
-        // 5. 保存上下文
-        requestContext.set(new RequestContext(conversationId, userMessages));
-        
-        // 6. 合并历史消息和当前消息
+        // 5. 合并历史消息和当前消息
         List<Message> allMessages = new ArrayList<>();
         allMessages.addAll(historyMessages);
         allMessages.addAll(currentMessages);
         
-        // 7. 创建新的 Prompt
+        // 6. 创建新的 Prompt
         return new Prompt(allMessages, prompt.getOptions());
     }
 
     @Override
     public String adviseResponse(Prompt prompt, String response, Map<String, Object> params) {
-        try {
-            // 1. 获取上下文
-            RequestContext context = requestContext.get();
-            if (context == null || context.userMessages.isEmpty()) {
-                return response;
-            }
-            
-            // 2. 保存用户消息到 ChatMemory
-            chatMemory.add(context.conversationId, context.userMessages);
-            
-            // 3. 保存助手响应到 ChatMemory
-            chatMemory.add(context.conversationId, List.of(new AssistantMessage(response)));
-            
-            return response;
-        } finally {
-            // 4. 清理 ThreadLocal
-            requestContext.remove();
+        // 1. 从参数获取 conversation ID
+        String conversationId = getConversationId(params);
+        
+        // 2. 只保存 AI 响应（用户消息已在 adviseRequest 中保存）
+        if (response != null && !response.isEmpty()) {
+            chatMemory.add(conversationId, List.of(new AssistantMessage(response)));
         }
+        
+        return response;
     }
 
     @Override
@@ -145,15 +139,26 @@ public class MessageChatMemoryAdvisor implements Advisor {
     }
 
     /**
-     * 请求上下文（保存在 ThreadLocal 中）
+     * 检查消息是否已存在于历史中（避免重复保存）
+     * 通过内容和类型进行简单判断
      */
-    private static class RequestContext {
-        final String conversationId;
-        final List<Message> userMessages;
-
-        RequestContext(String conversationId, List<Message> userMessages) {
-            this.conversationId = conversationId;
-            this.userMessages = userMessages;
+    private boolean isMessageInHistory(Message message, List<Message> historyMessages) {
+        if (historyMessages == null || historyMessages.isEmpty()) {
+            return false;
         }
+        
+        String content = message.getContent();
+        MessageType type = message.getMessageType();
+        
+        // 简单判断：如果历史中有相同类型和内容的消息，认为已存在
+        for (Message historyMessage : historyMessages) {
+            if (historyMessage.getMessageType() == type && 
+                historyMessage.getContent().equals(content)) {
+                return true;
+            }
+        }
+        
+        return false;
     }
+
 }

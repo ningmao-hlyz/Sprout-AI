@@ -6177,12 +6177,18 @@ public class MessageChatMemoryAdvisor implements Advisor {
         // 2. 获取历史消息
         List<Message> historyMessages = chatMemory.get(conversationId, -1);
         
-        // 3. 合并历史消息和当前消息
+        // 3. 立即保存用户消息
+        List<Message> userMessages = extractUserMessages(prompt);
+        if (!userMessages.isEmpty()) {
+            chatMemory.add(conversationId, userMessages);
+        }
+        
+        // 4. 合并历史消息和当前消息
         List<Message> allMessages = new ArrayList<>();
         allMessages.addAll(historyMessages);
         allMessages.addAll(prompt.getMessages());
         
-        // 4. 返回增强后的 Prompt
+        // 5. 返回增强后的 Prompt
         return new Prompt(allMessages, prompt.getOptions());
     }
     
@@ -6190,9 +6196,10 @@ public class MessageChatMemoryAdvisor implements Advisor {
     public String adviseResponse(Prompt prompt, String response, Map<String, Object> params) {
         String conversationId = getConversationId(params);
         
-        // 保存用户消息和 AI 响应到 ChatMemory
-        chatMemory.add(conversationId, extractUserMessages(prompt));
-        chatMemory.add(conversationId, List.of(new AssistantMessage(response)));
+        // 只保存 AI 响应（用户消息已在 adviseRequest 中保存）
+        if (response != null && !response.isEmpty()) {
+            chatMemory.add(conversationId, List.of(new AssistantMessage(response)));
+        }
         
         return response;
     }
