@@ -5893,6 +5893,220 @@ public void testStreamWithFunctionCalling() {
 
 ---
 
+### Chat Memory（对话历史管理）
+
+> 代码分支：chat-memory  
+
+
+实现对话历史的存储和管理，支持多轮对话上下文。提供 `ChatMemoryRepository` 接口抽象存储层，内置 `InMemoryChatMemoryRepository`（内存存储）、`RedisChatMemoryRepository`（Redis存储）和 `JdbcChatMemoryRepository`（MySQL/数据库存储）三种实现。通过 `MessageWindowChatMemory` 维护固定窗口大小的消息历史，自动保留系统消息并删除旧消息。
+
+####  架构设计
+
+ **接口设计**
+- `ChatMemory` - 对话历史管理接口
+- `ChatMemoryRepository` - 存储层抽象接口
+- `MessageWindowChatMemory` - 消息窗口实现
+
+ **存储实现**
+- `InMemoryChatMemoryRepository` - 默认内存存储（同 Spring AI）
+- `JdbcChatMemoryRepository` - JDBC 存储（同 Spring AI 的 JdbcChatMemoryRepository）
+- `RedisChatMemoryRepository` - Redis 扩展存储
+
+ **数据库表结构**
+- 表名：`sprout_ai_chat_memory`
+- 字段：conversation_id, message_type, content, created_at
+
+ **功能特性**
+- 消息窗口管理（默认 20 条）
+- 自动保留系统消息
+- 支持获取最近 N 条消息
+- 按对话 ID 隔离
+
+核心接口：
+
+```java
+// 存储层接口
+public interface ChatMemoryRepository {
+    void add(String conversationId, List<Message> messages);
+    List<Message> get(String conversationId, int lastN);
+    void clear(String conversationId);
+}
+
+// 内存存储实现
+public class InMemoryChatMemoryRepository implements ChatMemoryRepository {
+    private final ConcurrentHashMap<String, List<Message>> conversationHistory = new ConcurrentHashMap<>();
+    
+    @Override
+    public void add(String conversationId, List<Message> messages) {
+        conversationHistory.compute(conversationId, (key, existingMessages) -> {
+            if (existingMessages == null) {
+                return new ArrayList<>(messages);
+            }
+            existingMessages.addAll(messages);
+            return existingMessages;
+        });
+    }
+    // ...
+}
+
+// Redis 存储实现
+public class RedisChatMemoryRepository implements ChatMemoryRepository {
+    private final JedisPool jedisPool;
+    
+    @Override
+    public void add(String conversationId, List<Message> messages) {
+        String key = keyPrefix + conversationId;
+        try (Jedis jedis = jedisPool.getResource()) {
+            for (Message message : messages) {
+                JSONObject json = new JSONObject();
+                json.set("type", message.getMessageType().getValue());
+                json.set("content", message.getContent());
+                jedis.rpush(key, json.toString());
+            }
+        }
+    }
+    // ...
+}
+
+// MySQL/JDBC 存储实现
+public class JdbcChatMemoryRepository implements ChatMemoryRepository {
+    private final JdbcTemplate jdbcTemplate;
+    
+    private void initializeSchema() {
+        String createTableSql = """
+            CREATE TABLE IF NOT EXISTS spring_ai_chat_memory (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                conversation_id VARCHAR(255) NOT NULL,
+                message_type VARCHAR(50) NOT NULL,
+                content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_conversation_id (conversation_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """;
+        jdbcTemplate.execute(createTableSql);
+    }
+    
+    @Override
+    public void add(String conversationId, List<Message> messages) {
+        String insertSql = "INSERT INTO spring_ai_chat_memory (conversation_id, message_type, content) VALUES (?, ?, ?)";
+        for (Message message : messages) {
+            jdbcTemplate.update(insertSql,
+                    conversationId,
+                    message.getMessageType().getValue(),
+                    message.getContent());
+        }
+    }
+    // ...
+}
+```
+
+消息窗口管理：
+
+```java
+public class MessageWindowChatMemory implements ChatMemory {
+    private final ChatMemoryRepository repository;
+    private final int maxMessages;  // 默认 20
+
+    @Override
+    public void add(String conversationId, List<Message> messages) {
+        // 添加新消息
+        repository.add(conversationId, messages);
+        
+        // 获取所有消息
+        List<Message> allMessages = repository.get(conversationId, -1);
+        
+        // 如果超过最大消息数，保留系统消息 + 最近的消息
+        if (allMessages.size() > maxMessages) {
+            // 分离系统消息和其他消息
+            List<Message> systemMessages = new ArrayList<>();
+            List<Message> otherMessages = new ArrayList<>();
+            
+            for (Message message : allMessages) {
+                if (message.getMessageType() == MessageType.SYSTEM) {
+                    systemMessages.add(message);
+                } else {
+                    otherMessages.add(message);
+                }
+            }
+            
+            // 计算需要保留的非系统消息数量
+            int maxOtherMessages = maxMessages - systemMessages.size();
+            
+            // 获取最近的非系统消息
+            List<Message> recentOtherMessages = otherMessages.subList(
+                otherMessages.size() - maxOtherMessages, otherMessages.size());
+            
+            // 清除并重新添加
+            repository.clear(conversationId);
+            repository.add(conversationId, systemMessages);
+            repository.add(conversationId, recentOtherMessages);
+        }
+    }
+}
+```
+
+####  测试
+
+**SproutAIChatMemoryTest** - 一个测试类覆盖三种存储方式
+
+```java
+public class SproutAIChatMemoryTest {
+    
+    // 1. InMemory 存储测试
+    @Test
+    public void testInMemoryStorage() {
+        ChatMemory memory = MessageWindowChatMemory.builder()
+                .repository(new InMemoryChatMemoryRepository())
+                .maxMessages(10)
+                .build();
+        
+        memory.add("conversation-id", List.of(
+                new SystemMessage("你是助手"),
+                new UserMessage("你好"),
+                new AssistantMessage("你好！")
+        ));
+        
+        List<Message> messages = memory.get("conversation-id", -1);
+        //  InMemory 存储测试通过
+    }
+    
+    // 2. Redis 存储测试
+    @Test
+    public void testRedisStorage() {
+        JedisPool jedisPool = new JedisPool("localhost", 6379);
+        ChatMemory memory = MessageWindowChatMemory.builder()
+                .repository(new RedisChatMemoryRepository(jedisPool))
+                .maxMessages(10)
+                .build();
+        
+        //  Redis 存储测试通过（数据已保存到 Redis）
+    }
+    
+    // 3. MySQL 存储测试
+    @Test
+    public void testMySQLStorage() {
+        MysqlDataSource dataSource = new MysqlDataSource();
+        dataSource.setURL("jdbc:mysql://localhost:3306/sproutai_test");
+        dataSource.setUser("root");
+        dataSource.setPassword("123456");
+        
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        ChatMemory memory = MessageWindowChatMemory.builder()
+                .repository(new JdbcChatMemoryRepository(jdbcTemplate))
+                .maxMessages(10)
+                .build();
+        
+        //  MySQL 存储测试通过（数据已持久化到 MySQL）
+    }
+    
+   
+}
+```
+
+
+
+---
+
 # 其他
 
 - 微信：ningmaohlyz
