@@ -6098,11 +6098,149 @@ public class SproutAIChatMemoryTest {
         
         //  MySQL 存储测试通过（数据已持久化到 MySQL）
     }
-    
-   
 }
 ```
 
+---
+
+### Advisor（请求增强器）
+
+> 代码分支：chat-advisor
+
+提供 `Advisor` 接口用于在请求前后对 Prompt 进行增强处理。`MessageChatMemoryAdvisor` 实现自动管理对话历史，在请求前注入历史消息，在响应后保存对话。
+
+#### 核心接口
+
+```java
+public interface Advisor {
+    /**
+     * 在调用模型前处理 Prompt
+     */
+    Prompt adviseRequest(Prompt prompt);
+    
+    /**
+     * 在模型响应后处理（可选）
+     */
+    default String adviseResponse(String response) {
+        return response;
+    }
+}
+```
+
+#### MessageChatMemoryAdvisor 实现
+
+```java
+public class MessageChatMemoryAdvisor implements Advisor {
+    private final ChatMemory chatMemory;
+    private final String conversationId;
+    
+    @Override
+    public Prompt adviseRequest(Prompt prompt) {
+        // 1. 获取历史消息
+        List<Message> historyMessages = chatMemory.get(conversationId, -1);
+        
+        // 2. 合并历史消息和当前消息
+        List<Message> allMessages = new ArrayList<>();
+        allMessages.addAll(historyMessages);
+        allMessages.addAll(prompt.getMessages());
+        
+        // 3. 返回增强后的 Prompt
+        return new Prompt(allMessages, prompt.getOptions());
+    }
+    
+    @Override
+    public String adviseResponse(String response) {
+        // 保存对话到 ChatMemory
+        chatMemory.add(conversationId, List.of(
+            new UserMessage(currentUserMessage),
+            new AssistantMessage(response)
+        ));
+        return response;
+    }
+}
+```
+
+#### 使用示例
+
+```java
+// 1. 创建 ChatMemory
+ChatMemory chatMemory = MessageWindowChatMemory.builder()
+    .repository(new InMemoryChatMemoryRepository())
+    .maxMessages(20)
+    .build();
+
+// 2. 创建 Advisor
+MessageChatMemoryAdvisor advisor = MessageChatMemoryAdvisor.builder()
+    .chatMemory(chatMemory)
+    .conversationId("user-123")
+    .build();
+
+// 3. 使用 Advisor
+Prompt originalPrompt = new Prompt("什么是 Java？");
+
+// 增强请求（自动添加历史消息）
+Prompt enhancedPrompt = advisor.adviseRequest(originalPrompt);
+
+// 调用 ChatModel
+ChatResponse response = chatModel.call(enhancedPrompt);
+String aiResponse = response.getResult().getOutput().getContent();
+
+// 处理响应（自动保存历史）
+advisor.adviseResponse(aiResponse);
+
+// 后续对话会自动包含历史
+Prompt prompt2 = new Prompt("它有什么特点？");
+Prompt enhanced2 = advisor.adviseRequest(prompt2);  // 自动包含之前的对话历史
+```
+
+#### 测试
+
+**MessageChatMemoryAdvisorTest** 
+
+```java
+public class MessageChatMemoryAdvisorTest {
+    
+    @Test
+    public void testBasicAdvisorFunctionality() {
+        // 1. 测试无历史的请求
+        Prompt prompt1 = new Prompt("你好");
+        Prompt advised1 = advisor.adviseRequest(prompt1);
+        assertThat(advised1.getMessages()).hasSize(1);
+
+        // 2. 保存响应到历史
+        advisor.adviseResponse("你好！有什么可以帮助你的？");
+        assertThat(advisor.getHistory()).hasSize(2);
+
+        // 3. 测试有历史的请求（自动包含历史）
+        Prompt prompt2 = new Prompt("我想了解 Java");
+        Prompt advised2 = advisor.adviseRequest(prompt2);
+        assertThat(advised2.getMessages()).hasSize(3);  // 历史2条 + 当前1条
+
+        // 4. 测试清除历史
+        advisor.clear();
+        assertThat(advisor.getHistory()).isEmpty();
+    }
+    
+    @Test
+    public void testMultiRoundConversation() {
+        // 添加系统消息
+        chatMemory.add(conversationId, List.of(
+                new SystemMessage("你是编程助手")
+        ));
+
+        // 第一轮
+        advisor.adviseRequest(new Prompt("什么是 Java？"));
+        advisor.adviseResponse("Java 是一门编程语言");
+
+        // 第二轮（包含历史）
+        Prompt prompt2 = new Prompt("它有什么特点？");
+        Prompt advised2 = advisor.adviseRequest(prompt2);
+        
+        // 验证包含：系统消息 + 第一轮对话 + 当前消息
+        assertThat(advised2.getMessages().size()).isGreaterThanOrEqualTo(4);
+    }
+}
+```
 
 
 ---
