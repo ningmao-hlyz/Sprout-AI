@@ -230,14 +230,11 @@ public class DefaultChatClient implements ChatClient {
 
             // 4. 调用 ChatModel
             ChatResponse response = chatModel.call(prompt);
-            String content = response.getOutput();
 
             // 5. 应用 Advisor 链（响应后）
             if (!advisorsToUse.isEmpty()) {
                 AdvisorChainExecutor executor = new AdvisorChainExecutor(advisorsToUse);
-                content = executor.adviseResponse(prompt, content, advisorParams);
-                // 更新 response 的内容
-                response = new ChatResponse(content);
+                response = executor.adviseResponse(response, advisorParams);
             }
 
             return new DefaultCallResponseSpec(response);
@@ -437,7 +434,8 @@ public class DefaultChatClient implements ChatClient {
                 // 流式完成后，应用响应后的 Advisor（保存到历史等）
                 if (fullResponse.length() > 0) {
                     AdvisorChainExecutor executor = new AdvisorChainExecutor(advisors);
-                    executor.adviseResponse(prompt, fullResponse.toString(), advisorParams);
+                    ChatResponse finalResponse = new ChatResponse(fullResponse.toString());
+                    executor.adviseResponse(finalResponse, advisorParams);
                 }
             } else {
                 // 无 Advisor，直接调用

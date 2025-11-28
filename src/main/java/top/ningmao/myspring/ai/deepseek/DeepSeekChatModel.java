@@ -185,10 +185,27 @@ public class DeepSeekChatModel implements StreamingChatModel {
                 // 5. 没有工具调用，返回最终响应
                 String content = message.getStr("content");
                 AssistantMessage assistantMessage = new AssistantMessage(content);
+                messages.add(assistantMessage); // 添加最终响应到消息链
+                
                 Generation generation = new Generation(assistantMessage);
                 List<Generation> generations = new ArrayList<>();
                 generations.add(generation);
-                return new ChatResponse(generations);
+                
+                // 6. 创建包含完整消息链的 ChatResponse
+                Map<String, Object> metadata = new HashMap<>();
+                // 只保存工具调用相关的消息（不包括原始的 user message 和 system message）
+                List<Message> toolCallMessages = new ArrayList<>();
+                for (Message msg : messages) {
+                    // 跳过原始 prompt 中的消息，只保存新增的工具调用相关消息
+                    if (!prompt.getMessages().contains(msg)) {
+                        toolCallMessages.add(msg);
+                    }
+                }
+                if (!toolCallMessages.isEmpty()) {
+                    metadata.put(ChatResponse.METADATA_FULL_MESSAGE_CHAIN, toolCallMessages);
+                }
+                
+                return new ChatResponse(generations, metadata);
             }
             
             throw new RuntimeException("Tool calling exceeded maximum iterations");

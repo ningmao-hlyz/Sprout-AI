@@ -6490,6 +6490,164 @@ public void testConversationIsolation() {
 }
 ```
 
+
+---
+
+###  完整工具调用消息链支持
+
+> 代码分支: chat-extend-client-advisor
+
+
+本次更新实现了两个重大改进，完全对齐 Spring AI CallAdvisor 标准：
+
+#### 1 **Advisor 接口增强**
+
+新增 `adviseResponse(ChatResponse, Map)` 方法，支持访问完整的 ChatResponse 对象：
+
+```java
+public interface Advisor {
+    /**
+     * 在调用模型前处理 Prompt
+     */
+    Prompt adviseRequest(Prompt prompt, Map<String, Object> params);
+    
+    /**
+     * 在模型响应后处理（推荐使用）
+     * 支持访问完整的 ChatResponse，包括工具调用的中间消息
+     * @since 2025-11-28
+     */
+    default ChatResponse adviseResponse(ChatResponse response, Map<String, Object> params) {
+        return response;
+    }
+    
+    /**
+     * 在模型响应后处理（已废弃，保持向后兼容）
+     * @deprecated 使用 adviseResponse(ChatResponse, Map) 代替
+     */
+    @Deprecated
+    default String adviseResponse(Prompt prompt, String response, Map<String, Object> params) {
+        return response;
+    }
+}
+```
+
+**优势：**
+-  可以访问完整的 ChatResponse 对象
+-  支持获取工具调用的中间消息
+-  完全向后兼容（旧方法标记为 @Deprecated）
+
+#### 2 **完整工具调用消息链支持**
+
+- **ChatResponse** 新增 `metadata` 字段，存储完整的工具调用消息链
+- **DeepSeekChatModel** 返回包含所有中间消息的 ChatResponse
+- **MessageChatMemoryAdvisor** 自动保存完整的工具调用链
+
+**工具调用流程：**
+```
+用户: "查询北京天气"
+  ↓
+1. UserMessage: "查询北京天气"
+2. AssistantMessage (with tool_calls): 请求调用 get_weather 工具
+3. ToolMessage: {"city":"北京","weather":"晴天","temperature":"20°C"}
+4. AssistantMessage (final): "北京今天是晴天，温度20°C"
+
+ 所有消息自动保存到 ChatMemory
+```
+
+
+#### 测试
+
+```java
+ToolCallback weatherTool = new ToolCallback() {
+    @Override
+    public ToolDefinition getToolDefinition() {
+        return new ToolDefinition(
+            "get_weather",
+            "查询指定城市的天气信息",
+            """
+            {
+                "type": "object",
+                "properties": {
+                    "city": {
+                        "type": "string",
+                        "description": "城市名称，如：北京、上海"
+                    }
+                },
+                "required": ["city"]
+            }
+            """
+        );
+    }
+
+    @Override
+    public String call(String toolInput) {
+        // 模拟天气查询
+        return """
+            {
+                "city": "北京",
+                "weather": "晴天",
+                "temperature": "20°C",
+                "humidity": "45%"
+            }
+            """;
+    }
+};
+```
+
+ 同步调用（完整消息链自动保存）
+
+```java
+// 创建 ChatClient，配置 MessageChatMemoryAdvisor
+ChatClient chatClient = ChatClient.builder(chatModel)
+    .defaultAdvisors(new MessageChatMemoryAdvisor(chatMemory))
+    .build();
+
+// 配置工具
+DeepSeekChatOptions options = new DeepSeekChatOptions();
+options.setTools(List.of(weatherTool));
+
+// 调用工具
+ChatResponse response = chatClient.prompt("北京今天天气怎么样")
+    .options(options)
+    .advisors(a -> a.param(ChatMemoryConstants.CONVERSATION_ID, "user-123"))
+    .call()
+    .chatResponse();
+
+System.out.println("AI 响应: " + response.getOutput());
+
+// 查看完整的工具调用消息链
+List<Message> fullChain = response.getFullMessageChain();
+if (fullChain != null) {
+    for (Message msg : fullChain) {
+        System.out.println(msg.getMessageType() + ": " + msg.getContent());
+    }
+}
+
+// ChatMemory 自动保存的完整消息链：
+// 1. UserMessage: "北京今天天气怎么样"
+// 2. AssistantMessage (with tool_calls): 工具调用请求
+// 3. ToolMessage: 工具执行结果
+// 4. AssistantMessage (final): "北京今天是晴天，温度20°C"
+```
+
+ 流式调用（同样支持消息保存）
+
+```java
+// 流式输出 + 工具调用 + 完整消息链保存
+chatClient.prompt("上海今天天气如何")
+    .options(options)
+    .advisors(a -> a.param(ChatMemoryConstants.CONVERSATION_ID, "user-456"))
+    .stream()
+    .content(chunk -> System.out.print(chunk));
+
+// 流式完成后，历史消息已自动保存
+List<Message> history = chatMemory.get("user-456", -1);
+// history 包含用户消息和 AI 响应
+```
+
+
+
+
 ---
 
 # 其他
