@@ -1,5 +1,6 @@
 package top.ningmao.myspring.ai.chat.client;
 
+import top.ningmao.myspring.ai.chat.advisor.Advisor;
 import top.ningmao.myspring.ai.chat.model.ChatModel;
 import top.ningmao.myspring.ai.chat.prompt.ChatOptions;
 import top.ningmao.myspring.ai.chat.prompt.Prompt;
@@ -92,6 +93,15 @@ public interface ChatClient {
          * @return Builder
          */
         Builder defaultUser(String text);
+
+        /**
+         * 设置默认的 Advisors
+         * 这些 Advisor 会自动应用到所有请求
+         *
+         * @param advisors Advisor 列表
+         * @return Builder
+         */
+        Builder defaultAdvisors(Advisor... advisors);
 
         /**
          * 构建 ChatClient

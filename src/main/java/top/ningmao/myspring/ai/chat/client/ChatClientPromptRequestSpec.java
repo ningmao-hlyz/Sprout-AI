@@ -56,6 +56,14 @@ public interface ChatClientPromptRequestSpec {
     ChatClientPromptRequestSpec options(ChatOptions chatOptions);
 
     /**
+     * 配置 Advisors（覆盖默认 Advisors）
+     *
+     * @param advisorSpec Advisor 配置
+     * @return ChatClientPromptRequestSpec
+     */
+    ChatClientPromptRequestSpec advisors(Consumer<AdvisorSpec> advisorSpec);
+
+    /**
      * 调用 AI 模型
      *
      * @return CallResponseSpec

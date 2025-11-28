@@ -1,5 +1,7 @@
 package top.ningmao.myspring.ai.chat.client;
 
+import top.ningmao.myspring.ai.chat.advisor.Advisor;
+import top.ningmao.myspring.ai.chat.advisor.AdvisorChainExecutor;
 import top.ningmao.myspring.ai.chat.messages.Message;
 import top.ningmao.myspring.ai.chat.messages.SystemMessage;
 import top.ningmao.myspring.ai.chat.messages.UserMessage;
@@ -29,17 +31,20 @@ public class DefaultChatClient implements ChatClient {
     private final String defaultSystemText;
     private final String defaultUserText;
     private final TemplateRenderer templateRenderer;
+    private final List<Advisor> defaultAdvisors;
 
     private DefaultChatClient(ChatModel chatModel,
                               ChatOptions defaultChatOptions,
                               String defaultSystemText,
                               String defaultUserText,
-                              TemplateRenderer templateRenderer) {
+                              TemplateRenderer templateRenderer,
+                              List<Advisor> defaultAdvisors) {
         this.chatModel = chatModel;
         this.defaultChatOptions = defaultChatOptions;
         this.defaultSystemText = defaultSystemText;
         this.defaultUserText = defaultUserText;
         this.templateRenderer = templateRenderer != null ? templateRenderer : new DefaultTemplateRenderer();
+        this.defaultAdvisors = defaultAdvisors != null ? defaultAdvisors : Collections.emptyList();
     }
 
     @Override
@@ -75,6 +80,7 @@ public class DefaultChatClient implements ChatClient {
         private String defaultSystemText;
         private String defaultUserText;
         private TemplateRenderer templateRenderer;
+        private final List<Advisor> defaultAdvisors = new ArrayList<>();
 
         public DefaultBuilder(ChatModel chatModel) {
             if (chatModel == null) {
@@ -101,6 +107,14 @@ public class DefaultChatClient implements ChatClient {
             return this;
         }
 
+        @Override
+        public Builder defaultAdvisors(Advisor... advisors) {
+            if (advisors != null && advisors.length > 0) {
+                this.defaultAdvisors.addAll(Arrays.asList(advisors));
+            }
+            return this;
+        }
+
         public Builder templateRenderer(TemplateRenderer templateRenderer) {
             this.templateRenderer = templateRenderer;
             return this;
@@ -113,7 +127,8 @@ public class DefaultChatClient implements ChatClient {
                     this.defaultChatOptions,
                     this.defaultSystemText,
                     this.defaultUserText,
-                    this.templateRenderer
+                    this.templateRenderer,
+                    this.defaultAdvisors
             );
         }
     }
@@ -125,11 +140,15 @@ public class DefaultChatClient implements ChatClient {
 
         private final List<Message> messages = new ArrayList<>();
         private String userText;
-        private Map<String, Object> userParams = new HashMap<>();
+        private final Map<String, Object> userParams = new HashMap<>();
         private String systemText;
-        private Map<String, Object> systemParams = new HashMap<>();
+        private final Map<String, Object> systemParams = new HashMap<>();
         private ChatOptions chatOptions;
         private Prompt existingPrompt;
+        
+        // Advisor 相关
+        private final Map<String, Object> advisorParams = new HashMap<>();
+        private List<Advisor> runtimeAdvisors = null; // null 表示使用 defaultAdvisors
 
         public DefaultChatClientPromptRequestSpec() {
             // 应用默认值
@@ -185,78 +204,101 @@ public class DefaultChatClient implements ChatClient {
         }
 
         @Override
+        public ChatClientPromptRequestSpec advisors(Consumer<AdvisorSpec> advisorSpecConsumer) {
+            DefaultAdvisorSpec spec = new DefaultAdvisorSpec();
+            advisorSpecConsumer.accept(spec);
+            this.advisorParams.putAll(spec.params);
+            if (spec.advisors != null) {
+                this.runtimeAdvisors = spec.advisors;
+            }
+            return this;
+        }
+
+        @Override
         public CallResponseSpec call() {
-            // 构建 Prompt
-            Prompt prompt;
-            if (existingPrompt != null) {
-                prompt = existingPrompt;
-            } else {
-                List<Message> promptMessages = new ArrayList<>();
+            // 1. 构建原始 Prompt
+            Prompt prompt = buildPrompt();
 
-                // 添加系统消息
-                if (systemText != null && !systemText.isBlank()) {
-                    String renderedSystemText = templateRenderer.apply(systemText, systemParams);
-                    promptMessages.add(new SystemMessage(renderedSystemText));
-                }
+            // 2. 确定使用哪些 Advisors（运行时 > 默认）
+            List<Advisor> advisorsToUse = runtimeAdvisors != null ? runtimeAdvisors : defaultAdvisors;
 
-                // 添加用户消息
-                if (userText != null && !userText.isBlank()) {
-                    String renderedUserText = templateRenderer.apply(userText, userParams);
-                    promptMessages.add(new UserMessage(renderedUserText));
-                }
-
-                // 添加其他消息
-                promptMessages.addAll(messages);
-
-                prompt = new Prompt(promptMessages, chatOptions);
+            // 3. 应用 Advisor 链（请求前）
+            if (!advisorsToUse.isEmpty()) {
+                AdvisorChainExecutor executor = new AdvisorChainExecutor(advisorsToUse);
+                prompt = executor.adviseRequest(prompt, advisorParams);
             }
 
-            // 调用 ChatModel
+            // 4. 调用 ChatModel
             ChatResponse response = chatModel.call(prompt);
+            String content = response.getOutput();
+
+            // 5. 应用 Advisor 链（响应后）
+            if (!advisorsToUse.isEmpty()) {
+                AdvisorChainExecutor executor = new AdvisorChainExecutor(advisorsToUse);
+                content = executor.adviseResponse(prompt, content, advisorParams);
+                // 更新 response 的内容
+                response = new ChatResponse(content);
+            }
 
             return new DefaultCallResponseSpec(response);
         }
 
-        @Override
-        public StreamResponseSpec stream() {
-            // 构建 Prompt（与 call() 方法相同的逻辑）
-            Prompt prompt;
+        /**
+         * 构建 Prompt
+         */
+        private Prompt buildPrompt() {
             if (existingPrompt != null) {
-                prompt = existingPrompt;
-            } else {
-                List<Message> promptMessages = new ArrayList<>();
-
-                // 添加系统消息
-                if (systemText != null && !systemText.isBlank()) {
-                    String renderedSystemText = templateRenderer.apply(systemText, systemParams);
-                    promptMessages.add(new SystemMessage(renderedSystemText));
-                }
-
-                // 添加用户消息
-                if (userText != null && !userText.isBlank()) {
-                    String renderedUserText = templateRenderer.apply(userText, userParams);
-                    promptMessages.add(new UserMessage(renderedUserText));
-                }
-
-                // 添加其他消息
-                promptMessages.addAll(messages);
-
-                prompt = new Prompt(promptMessages, chatOptions);
+                return existingPrompt;
             }
 
-            // 检查 ChatModel 是否支持流式
+            List<Message> promptMessages = new ArrayList<>();
+
+            // 添加系统消息
+            if (systemText != null && !systemText.isBlank()) {
+                String renderedSystemText = templateRenderer.apply(systemText, systemParams);
+                promptMessages.add(new SystemMessage(renderedSystemText));
+            }
+
+            // 添加用户消息
+            if (userText != null && !userText.isBlank()) {
+                String renderedUserText = templateRenderer.apply(userText, userParams);
+                promptMessages.add(new UserMessage(renderedUserText));
+            }
+
+            // 添加其他消息
+            promptMessages.addAll(messages);
+
+            return new Prompt(promptMessages, chatOptions);
+        }
+
+        @Override
+        public StreamResponseSpec stream() {
+            // 1. 构建原始 Prompt
+            Prompt prompt = buildPrompt();
+
+            // 2. 确定使用哪些 Advisors（运行时 > 默认）
+            List<Advisor> advisorsToUse = runtimeAdvisors != null ? runtimeAdvisors : defaultAdvisors;
+
+            // 3. 应用 Advisor 链（请求前）
+            if (!advisorsToUse.isEmpty()) {
+                AdvisorChainExecutor executor = new AdvisorChainExecutor(advisorsToUse);
+                prompt = executor.adviseRequest(prompt, advisorParams);
+            }
+
+            // 4. 检查 ChatModel 是否支持流式
             if (!(chatModel instanceof StreamingChatModel)) {
                 throw new UnsupportedOperationException(
                         "The ChatModel does not support streaming. Please use a StreamingChatModel implementation.");
             }
 
-            return new DefaultStreamResponseSpec((StreamingChatModel) chatModel, prompt);
+            // 5. 返回流式响应
+            return new DefaultStreamResponseSpec((StreamingChatModel) chatModel, prompt, advisorsToUse, advisorParams);
         }
 
         /**
          * 默认 UserSpec 实现
          */
-        private static class DefaultUserSpec implements UserSpec {
+        private class DefaultUserSpec implements UserSpec {
             private String text;
             private final Map<String, Object> params = new HashMap<>();
 
@@ -282,7 +324,7 @@ public class DefaultChatClient implements ChatClient {
         /**
          * 默认 SystemSpec 实现
          */
-        private static class DefaultSystemSpec implements SystemSpec {
+        private class DefaultSystemSpec implements SystemSpec {
             private String text;
             private final Map<String, Object> params = new HashMap<>();
 
@@ -301,6 +343,40 @@ public class DefaultChatClient implements ChatClient {
             @Override
             public SystemSpec params(Map<String, Object> params) {
                 this.params.putAll(params);
+                return this;
+            }
+        }
+
+        /**
+         * 默认 AdvisorSpec 实现
+         */
+        private class DefaultAdvisorSpec implements AdvisorSpec {
+            private final Map<String, Object> params = new HashMap<>();
+            private List<Advisor> advisors = null;
+
+            @Override
+            public AdvisorSpec param(String key, Object value) {
+                this.params.put(key, value);
+                return this;
+            }
+
+            @Override
+            public AdvisorSpec params(Map<String, Object> params) {
+                this.params.putAll(params);
+                return this;
+            }
+
+            @Override
+            public AdvisorSpec advisors(Advisor... advisors) {
+                if (advisors != null && advisors.length > 0) {
+                    this.advisors = Arrays.asList(advisors);
+                }
+                return this;
+            }
+
+            @Override
+            public AdvisorSpec advisors(List<Advisor> advisors) {
+                this.advisors = advisors;
                 return this;
             }
         }
@@ -335,16 +411,38 @@ public class DefaultChatClient implements ChatClient {
 
         private final StreamingChatModel streamingChatModel;
         private final Prompt prompt;
+        private final List<Advisor> advisors;
+        private final Map<String, Object> advisorParams;
 
-        public DefaultStreamResponseSpec(StreamingChatModel streamingChatModel, Prompt prompt) {
+        public DefaultStreamResponseSpec(StreamingChatModel streamingChatModel, Prompt prompt,
+                                         List<Advisor> advisors, Map<String, Object> advisorParams) {
             this.streamingChatModel = streamingChatModel;
             this.prompt = prompt;
+            this.advisors = advisors;
+            this.advisorParams = advisorParams;
         }
 
         @Override
         public void content(Consumer<String> consumer) {
-            // 调用 StreamingChatModel 的 stream 方法
-            streamingChatModel.stream(prompt, consumer);
+            // 流式输出：直接调用 StreamingChatModel
+            // 注意：响应后的 Advisor 在流式场景下较复杂，需要累积完整响应后处理
+            if (advisors != null && !advisors.isEmpty()) {
+                // 累积完整响应后应用 Advisor
+                StringBuilder fullResponse = new StringBuilder();
+                streamingChatModel.stream(prompt, chunk -> {
+                    fullResponse.append(chunk);
+                    consumer.accept(chunk); // 实时输出
+                });
+                
+                // 流式完成后，应用响应后的 Advisor（保存到历史等）
+                if (fullResponse.length() > 0) {
+                    AdvisorChainExecutor executor = new AdvisorChainExecutor(advisors);
+                    executor.adviseResponse(prompt, fullResponse.toString(), advisorParams);
+                }
+            } else {
+                // 无 Advisor，直接调用
+                streamingChatModel.stream(prompt, consumer);
+            }
         }
 
         @Override

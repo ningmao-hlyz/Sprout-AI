@@ -6312,7 +6312,183 @@ public class MessageChatMemoryAdvisorTest {
     }
 }
 ```
+---
 
+
+### ChatClient 与 Advisor集成
+
+> 代码分支: chat-advisor-client
+
+与 ChatClient 集成后，Advisor 会自动应用，无需手动调用：
+
+**流程图说明：**
+>  **提示**：如果你的编辑器不支持 Mermaid，可以：
+> 1. 在 GitHub 上查看（原生支持）
+> 2. 使用 mermaid 插件
+
+```mermaid
+graph TB
+    Start([用户发起请求]) --> ClientPrompt[ChatClient.prompt 'userInput']
+    ClientPrompt --> AddParams[.advisors: 设置 conversationId]
+    AddParams --> CallMethod[.call / .stream]
+    
+    CallMethod --> AdvisorChain{AdvisorChainExecutor<br/>执行 Advisor 链}
+    
+    AdvisorChain --> AdviseReq[adviseRequest 请求前处理]
+    
+    AdviseReq --> GetConvId[获取 conversationId<br/>从 params]
+    GetConvId --> LoadHistory[从 ChatMemory<br/>加载历史消息]
+    LoadHistory --> SaveNewMsg[保存当前新消息<br/>除 SystemMessage]
+    SaveNewMsg --> CheckDup{检查消息<br/>是否重复?}
+    CheckDup -->|重复| SkipSave[跳过保存]
+    CheckDup -->|不重复| SaveToDB[(保存到 ChatMemory)]
+    
+    SkipSave --> MergeMsg[合并历史 + 当前消息]
+    SaveToDB --> MergeMsg
+    
+    MergeMsg --> EnhancedPrompt[生成增强后的 Prompt<br/>包含完整上下文]
+    
+    EnhancedPrompt --> CallModel[调用 ChatModel<br/>DeepSeek API]
+    
+    CallModel --> GetResponse[获取 AI 响应]
+    
+    GetResponse --> AdviseResp[adviseResponse 响应后处理]
+    
+    AdviseResp --> SaveAssistant[保存 AssistantMessage<br/>到 ChatMemory]
+    
+    SaveAssistant --> ReturnResponse[返回响应给用户]
+    
+    ReturnResponse --> End([完成])
+    
+    style Start fill:#e1f5e1
+    style End fill:#e1f5e1
+    style AdvisorChain fill:#fff4e1
+    style AdviseReq fill:#e1f0ff
+    style AdviseResp fill:#e1f0ff
+    style SaveToDB fill:#ffe1e1
+    style SaveAssistant fill:#ffe1e1
+    style CallModel fill:#f0e1ff
+```
+
+
+#### 使用详情
+
+```java
+// 1. 创建 ChatMemory 和 Advisor
+ChatMemory chatMemory = MessageWindowChatMemory.builder()
+    .repository(new InMemoryChatMemoryRepository())
+    .maxMessages(20)
+    .build();
+
+MessageChatMemoryAdvisor advisor = new MessageChatMemoryAdvisor(chatMemory);
+
+// 2. 构建 ChatClient（配置默认 Advisor）
+ChatClient chatClient = ChatClient.builder(chatModel)
+    .defaultSystem("你是智能助手")
+    .defaultAdvisors(advisor)  // 自动应用到所有请求
+    .build();
+
+// 3. 使用（自动管理对话历史）
+String response1 = chatClient.prompt("你好")
+    .advisors(a -> a.param(ChatMemoryConstants.CONVERSATION_ID, "user-123"))
+    .call()
+    .content();
+// response1: "你好！有什么可以帮助你的？"
+
+// 4. 后续对话自动包含历史
+String response2 = chatClient.prompt("我刚才说了什么？")
+    .advisors(a -> a.param(ChatMemoryConstants.CONVERSATION_ID, "user-123"))
+    .call()
+    .content();
+// response2: "你刚才说'你好'"（AI 自动回忆历史）
+```
+
+**支持流式输出：**
+
+```java
+chatClient.prompt("讲个故事")
+    .advisors(a -> a.param(ChatMemoryConstants.CONVERSATION_ID, "user-123"))
+    .stream()
+    .content(chunk -> System.out.print(chunk));
+// 流式完成后，自动保存对话历史
+```
+
+**运行时指定 Advisor：**
+
+```java
+// 不使用默认 Advisor，运行时指定
+ChatClient client = ChatClient.builder(chatModel).build();
+
+String response = client.prompt("测试")
+    .advisors(spec -> spec
+        .advisors(new MessageChatMemoryAdvisor(chatMemory))
+        .param(ChatMemoryConstants.CONVERSATION_ID, "user-456")
+    )
+    .call()
+    .content();
+```
+
+**多会话隔离：**
+
+```java
+// 不同用户的对话历史是隔离的
+chatClient.prompt("我是 Alice")
+    .advisors(a -> a.param(ChatMemoryConstants.CONVERSATION_ID, "alice"))
+    .call().content();
+
+chatClient.prompt("我是 Bob")
+    .advisors(a -> a.param(ChatMemoryConstants.CONVERSATION_ID, "bob"))
+    .call().content();
+// Alice 和 Bob 的对话历史互不干扰
+```
+
+#### 测试
+
+
+```java
+@Test
+public void testBasicConversation() {
+    String conversationId = "user-123";
+
+    // 第一轮
+    chatClient.prompt("你好，我叫宁猫")
+            .advisors(a -> a.param(ChatMemoryConstants.CONVERSATION_ID, conversationId))
+            .call()
+            .content();
+
+    // 第二轮
+    chatClient.prompt("你知道我叫什么吗")
+            .advisors(a -> a.param(ChatMemoryConstants.CONVERSATION_ID, conversationId))
+            .call()
+            .content();
+
+    // 验证保存了两轮对话
+    List<Message> history = chatMemory.get(conversationId, -1);
+    System.out.println(history);
+    assertThat(history).hasSize(4); // user + assistant + user + assistant
+}
+
+@Test
+public void testConversationIsolation() {
+    // 两个不同的对话
+    chatClient.prompt("你好，我是 宁猫")
+            .advisors(a -> a.param(ChatMemoryConstants.CONVERSATION_ID, "conv-1"))
+            .call().content();
+
+    chatClient.prompt("你知道我叫什么吗")
+            .advisors(a -> a.param(ChatMemoryConstants.CONVERSATION_ID, "conv-2"))
+            .call().content();
+
+    // 验证对话隔离
+    List<Message> history1 = chatMemory.get("conv-1", -1);
+    List<Message> history2 = chatMemory.get("conv-2", -1);
+    System.out.println(history1);
+    System.out.println(history2);
+
+    assertThat(history1).hasSize(2);
+    assertThat(history2).hasSize(2);
+}
+```
 
 ---
 
