@@ -6115,52 +6115,103 @@ public class SproutAIChatMemoryTest {
 public interface Advisor {
     /**
      * 在调用模型前处理 Prompt
+     * @param prompt 原始 Prompt
+     * @param params 运行时参数（如 conversation_id）
+     * @return 增强后的 Prompt
      */
-    Prompt adviseRequest(Prompt prompt);
+    Prompt adviseRequest(Prompt prompt, Map<String, Object> params);
     
     /**
      * 在模型响应后处理（可选）
+     * @param prompt   原始 Prompt
+     * @param response 模型响应内容
+     * @param params   运行时参数
+     * @return 处理后的响应内容
      */
-    default String adviseResponse(String response) {
+    default String adviseResponse(Prompt prompt, String response, Map<String, Object> params) {
         return response;
+    }
+    
+    /**
+     * 获取 Advisor 名称
+     */
+    String getName();
+    
+    /**
+     * 获取执行顺序（值越小优先级越高）
+     */
+    default int getOrder() {
+        return 0;
     }
 }
 ```
 
+**设计特点：**
+-  **参数化** - 通过 `params` 传递运行时配置
+-  **有序执行** - 支持多个 Advisor 按优先级执行
+-  **双向增强** - 请求前和响应后都可处理
+-  **易于扩展** - 可实现日志、RAG、安全检查等功能
+
 #### MessageChatMemoryAdvisor 实现
+
+自动管理对话历史的 Advisor 实现，支持多轮对话上下文。
+
+**核心功能：**
+1. 请求前：从 ChatMemory 获取历史消息并注入到 Prompt
+2. 响应后：保存用户消息和 AI 响应到 ChatMemory
+3. 参数化：通过 `CONVERSATION_ID` 参数支持多会话隔离
 
 ```java
 public class MessageChatMemoryAdvisor implements Advisor {
     private final ChatMemory chatMemory;
-    private final String conversationId;
+    
+    public MessageChatMemoryAdvisor(ChatMemory chatMemory) {
+        this.chatMemory = chatMemory;
+    }
     
     @Override
-    public Prompt adviseRequest(Prompt prompt) {
-        // 1. 获取历史消息
+    public Prompt adviseRequest(Prompt prompt, Map<String, Object> params) {
+        // 1. 从参数获取 conversation ID
+        String conversationId = getConversationId(params);
+        
+        // 2. 获取历史消息
         List<Message> historyMessages = chatMemory.get(conversationId, -1);
         
-        // 2. 合并历史消息和当前消息
+        // 3. 合并历史消息和当前消息
         List<Message> allMessages = new ArrayList<>();
         allMessages.addAll(historyMessages);
         allMessages.addAll(prompt.getMessages());
         
-        // 3. 返回增强后的 Prompt
+        // 4. 返回增强后的 Prompt
         return new Prompt(allMessages, prompt.getOptions());
     }
     
     @Override
-    public String adviseResponse(String response) {
-        // 保存对话到 ChatMemory
-        chatMemory.add(conversationId, List.of(
-            new UserMessage(currentUserMessage),
-            new AssistantMessage(response)
-        ));
+    public String adviseResponse(Prompt prompt, String response, Map<String, Object> params) {
+        String conversationId = getConversationId(params);
+        
+        // 保存用户消息和 AI 响应到 ChatMemory
+        chatMemory.add(conversationId, extractUserMessages(prompt));
+        chatMemory.add(conversationId, List.of(new AssistantMessage(response)));
+        
         return response;
+    }
+    
+    @Override
+    public String getName() {
+        return "MessageChatMemoryAdvisor";
+    }
+    
+    @Override
+    public int getOrder() {
+        return 0; // 最高优先级，最先执行
     }
 }
 ```
 
 #### 使用示例
+
+##### 基础使用（手动应用 Advisor）
 
 ```java
 // 1. 创建 ChatMemory
@@ -6170,74 +6221,87 @@ ChatMemory chatMemory = MessageWindowChatMemory.builder()
     .build();
 
 // 2. 创建 Advisor
-MessageChatMemoryAdvisor advisor = MessageChatMemoryAdvisor.builder()
-    .chatMemory(chatMemory)
-    .conversationId("user-123")
-    .build();
+MessageChatMemoryAdvisor advisor = new MessageChatMemoryAdvisor(chatMemory);
 
-// 3. 使用 Advisor
+// 3. 准备参数（指定 conversation ID）
+Map<String, Object> params = new HashMap<>();
+params.put(ChatMemoryConstants.CONVERSATION_ID, "user-123");
+
+// 4. 使用 Advisor 增强请求
 Prompt originalPrompt = new Prompt("什么是 Java？");
+Prompt enhancedPrompt = advisor.adviseRequest(originalPrompt, params);
 
-// 增强请求（自动添加历史消息）
-Prompt enhancedPrompt = advisor.adviseRequest(originalPrompt);
-
-// 调用 ChatModel
+// 5. 调用 ChatModel
 ChatResponse response = chatModel.call(enhancedPrompt);
 String aiResponse = response.getResult().getOutput().getContent();
 
-// 处理响应（自动保存历史）
-advisor.adviseResponse(aiResponse);
+// 6. 处理响应（自动保存历史）
+advisor.adviseResponse(originalPrompt, aiResponse, params);
 
-// 后续对话会自动包含历史
+// 7. 后续对话会自动包含历史
 Prompt prompt2 = new Prompt("它有什么特点？");
-Prompt enhanced2 = advisor.adviseRequest(prompt2);  // 自动包含之前的对话历史
+Prompt enhanced2 = advisor.adviseRequest(prompt2, params);
+// enhanced2 现在包含了之前的对话历史
 ```
 
-#### 测试
+**参数说明：**
+- `ChatMemoryConstants.CONVERSATION_ID` - 对话 ID，用于隔离不同用户的对话
+- 不同的 `conversation_id` 会维护独立的对话历史
 
-**MessageChatMemoryAdvisorTest** 
+#### 测试
 
 ```java
 public class MessageChatMemoryAdvisorTest {
     
     @Test
     public void testBasicAdvisorFunctionality() {
+        Map<String, Object> params = createParams("test-conversation");
+        
         // 1. 测试无历史的请求
         Prompt prompt1 = new Prompt("你好");
-        Prompt advised1 = advisor.adviseRequest(prompt1);
+        Prompt advised1 = advisor.adviseRequest(prompt1, params);
         assertThat(advised1.getMessages()).hasSize(1);
 
         // 2. 保存响应到历史
-        advisor.adviseResponse("你好！有什么可以帮助你的？");
-        assertThat(advisor.getHistory()).hasSize(2);
+        advisor.adviseResponse(prompt1, "你好！有什么可以帮助你的？", params);
+        assertThat(advisor.getHistory("test-conversation")).hasSize(2);
 
         // 3. 测试有历史的请求（自动包含历史）
         Prompt prompt2 = new Prompt("我想了解 Java");
-        Prompt advised2 = advisor.adviseRequest(prompt2);
+        Prompt advised2 = advisor.adviseRequest(prompt2, params);
         assertThat(advised2.getMessages()).hasSize(3);  // 历史2条 + 当前1条
 
         // 4. 测试清除历史
-        advisor.clear();
-        assertThat(advisor.getHistory()).isEmpty();
+        advisor.clear("test-conversation");
+        assertThat(advisor.getHistory("test-conversation")).isEmpty();
     }
     
     @Test
     public void testMultiRoundConversation() {
+        Map<String, Object> params = createParams("test-conversation");
+        
         // 添加系统消息
-        chatMemory.add(conversationId, List.of(
+        chatMemory.add("test-conversation", List.of(
                 new SystemMessage("你是编程助手")
         ));
 
         // 第一轮
-        advisor.adviseRequest(new Prompt("什么是 Java？"));
-        advisor.adviseResponse("Java 是一门编程语言");
+        Prompt prompt1 = new Prompt("什么是 Java？");
+        advisor.adviseRequest(prompt1, params);
+        advisor.adviseResponse(prompt1, "Java 是一门编程语言", params);
 
         // 第二轮（包含历史）
         Prompt prompt2 = new Prompt("它有什么特点？");
-        Prompt advised2 = advisor.adviseRequest(prompt2);
+        Prompt advised2 = advisor.adviseRequest(prompt2, params);
         
         // 验证包含：系统消息 + 第一轮对话 + 当前消息
         assertThat(advised2.getMessages().size()).isGreaterThanOrEqualTo(4);
+    }
+    
+    private Map<String, Object> createParams(String conversationId) {
+        Map<String, Object> params = new HashMap<>();
+        params.put(ChatMemoryConstants.CONVERSATION_ID, conversationId);
+        return params;
     }
 }
 ```
