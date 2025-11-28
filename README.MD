@@ -5,7 +5,11 @@
 
 ## 项目简介
 
-Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring优化完善。曾为mini-spring贡献多个被合并的PR，注释与文档经润色更加详尽。项目实现了IoC、AOP、资源加载器、事件监听器、类型转换、容器扩展点、bean生命周期管理、作用域控制、应用上下文、懒加载、包扫描、@Autowired/@Value注解及循环依赖解决等Spring核心功能。
+Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring优化完善。曾为mini-spring贡献多个被合并的PR，注释与文档经润色更加详尽。
+
+**核心框架部分**：实现了IoC、AOP、资源加载器、事件监听器、类型转换、容器扩展点、bean生命周期管理、作用域控制、应用上下文、懒加载、包扫描、@Autowired/@Value注解及循环依赖解决等Spring核心功能。
+
+**AI应用部分**：参考Spring AI架构设计，实现了完整的AI Chat客户端框架，包括Prompt模板、消息管理、ChatMemory、Advisor链式调用、工具调用（Function Calling）、流式输出等企业级AI应用开发能力。
 
 ## 使用技术栈
 
@@ -29,6 +33,14 @@ Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring
 
 - **Hutool 5.8.16** - Java工具类库，简化开发
 
+### AI 相关依赖
+
+- **DeepSeek API** - 大语言模型服务
+
+- **OkHttp** - HTTP客户端（用于API调用）
+
+- **Jackson** - JSON序列化和反序列化
+
 
 ### 测试框架
 
@@ -38,7 +50,9 @@ Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring
 
 ## 核心实现功能
 
-### IOC容器
+### 🌱 Spring 核心框架
+
+#### IOC容器
 
 - [x] Bean定义与注册机制
 
@@ -60,7 +74,7 @@ Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring
 
 
 
-### AOP编程
+#### AOP编程
 
 - [x] JDK动态代理
 
@@ -74,7 +88,7 @@ Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring
 
 
 
-### 扩展功能
+#### 扩展功能
 
 - [x] 事件发布与监听机制
 
@@ -88,6 +102,35 @@ Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring
 
 - [x] 属性占位符解析
 
+###  AI 应用框架
+
+#### Chat Client
+
+- [x] ChatClient 流式构建器设计
+- [x] Prompt 模板系统
+- [x] Message 消息抽象（User/System/Assistant/Tool）
+- [x] ChatMemory 对话记忆管理
+- [x] Advisor 链式调用机制
+- [x] 工具调用（Function Calling）完整支持
+- [x] 流式输出与同步调用
+- [x] 完整工具调用消息链自动保存
+
+#### Model Integration
+
+- [x] DeepSeek Chat Model 集成
+- [x] ChatOptions 配置管理
+- [x] ChatResponse 元数据支持
+- [x] 工具定义与回调机制
+
+#### Memory & Advisor
+
+- [x] InMemoryChatMemoryRepository（内存存储）
+- [x] RedisChatMemoryRepository（Redis存储）
+- [x] JdbcChatMemoryRepository（MySQL存储）
+- [x] MessageWindowChatMemory（滑动窗口）
+- [x] MessageChatMemoryAdvisor（自动保存历史）
+- [x] 对话隔离与会话管理
+
 
 
 ## 通过此项目能学到什么
@@ -96,69 +139,93 @@ Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring
 
 ### 设计模式
 
-> 内部配套个人笔记，详细八股！面试直接从spring源码举例，突出自身！
+> 内部配套个人笔记，详细八股！面试直接从 spring 源码 + Spring AI 源码举例，突出自身！
+
+#### Spring 核心框架
 
 - **工厂模式** - BeanFactory体系设计
-
 - **单例模式** - Bean作用域管理
-
 - **模板方法模式** - AbstractBeanFactory抽象类设计
-
 - **策略模式** - 实例化策略、代理策略
-
 - **代理模式** - AOP动态代理实现
-
 - **观察者模式** - 事件发布订阅机制
-
 - **适配器模式** - 各种Advice适配器
-
 - **责任链模式** - BeanPostProcessor处理链
+
+#### AI 应用框架
+
+- **Builder模式** - ChatClient流式构建器设计
+- **责任链模式** - Advisor链式调用机制
+- **策略模式** - ChatMemory多种存储策略（内存/Redis/MySQL）
+- **模板方法模式** - Prompt模板系统设计
+- **适配器模式** - 不同AI模型的统一接口适配
+- **装饰器模式** - Message和ChatResponse的增强
+- **工厂模式** - ToolCallback工具创建
 
 
 
 ### 框架设计思想
 
+#### Spring 核心
+
 - **控制反转(IOC)** - 依赖关系的管理和注入
-
 - **面向切面编程(AOP)** - 横切关注点的分离
-
 - **约定优于配置** - 注解驱动开发
-
 - **扩展点设计** - 各种PostProcessor机制
-
 - **生命周期管理** - Bean的完整生命周期
+
+#### AI 应用
+
+- **流式API设计** - ChatClient的链式调用体验
+- **插件化架构** - Advisor可插拔扩展机制
+- **元数据驱动** - ChatResponse metadata存储扩展信息
+- **接口抽象** - ChatModel/StreamingChatModel统一抽象
+- **向后兼容策略** - @Deprecated平滑升级
 
 
 
 ### 核心技术原理
 
+#### Spring 框架
+
 - **反射机制** - 动态创建对象和调用方法
-
 - **注解处理** - 运行时注解解析和处理
-
 - **XML解析** - DOM4J解析配置文件
-
 - **字节码增强** - CGLIB动态生成子类
-
 - **动态代理** - JDK Proxy和CGLIB的使用
-
 - **线程安全** - 单例Bean的线程安全处理
-
 - **循环依赖** - 三级缓存解决循环引用
+
+#### AI 应用
+
+- **HTTP客户端** - OkHttp实现API调用
+- **SSE流式传输** - Server-Sent Events实时响应
+- **JSON处理** - Jackson序列化和反序列化
+- **工具调用机制** - Function Calling完整流程
+- **消息链管理** - 完整对话历史的累积和保存
+- **流式解析** - 实时解析SSE数据流
+- **会话管理** - ConversationId隔离和上下文管理
 
 
 
 ### 架构设计能力
 
+#### 通用架构
+
 - **分层架构** - 清晰的模块分层设计
-
 - **接口设计** - 面向接口编程的实践
-
 - **扩展性设计** - 预留扩展点和插件机制
-
 - **异常处理** - 完整的异常体系设计
-
 - **缓存机制** - 多级缓存的设计和实现
+
+#### AI 专项
+
+- **领域模型设计** - Message/Prompt/ChatResponse等核心抽象
+- **API抽象设计** - ChatModel统一接口，支持多模型切换
+- **存储策略设计** - 内存/Redis/MySQL多种存储方案
+- **流式处理架构** - 同步调用和流式输出的统一处理
+- **元数据扩展** - 通过metadata传递额外信息
+- **向后兼容设计** - 接口演进时保持兼容性
 
 
 
@@ -177,13 +244,20 @@ Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring
 
 ## TODO
 
-> 目前就想到这些
+### Spring 核心框架
 
-- [ ]  有一些包导入问题，需要修复（不影响使用与学习）
-- [ ]  @Lazy注解实现与其解决依赖循环相关
-- [ ]  实现Ordered接口的优先级排序机制
+- [ ] 有一些包导入问题，需要修复（不影响使用与学习）
+- [ ] @Lazy注解实现与其解决依赖循环相关
+- [ ] 实现Ordered接口的优先级排序机制
 - [ ] 事务相关（例如传播机制）
 - [ ] 线程池相关
+
+### AI 应用扩展
+
+- [ ] RAG 文档检索增强
+- [ ] 向量数据库集成
+- [ ] Embedding 模型支持
+- [ ] 策略模式+配置文件实现多模型切换
 
 
 # IOC
@@ -6645,7 +6719,51 @@ List<Message> history = chatMemory.get("user-456", -1);
 // history 包含用户消息和 AI 响应
 ```
 
+---
 
+###  AI-Chat 篇章结语
+
+在参考Spring AI的架构设计下，这篇章我们实现了一个**企业级 AI 对话应用框架**的核心功能：
+
+####  实现成果
+
+1. **完整的 ChatClient 架构** - 参考 Spring AI 设计，实现了流式构建器、Prompt 模板、消息抽象等核心组件
+2. **Advisor 链式调用机制** - 支持请求前后处理，完全对齐 Spring AI CallAdvisor 标准
+3. **ChatMemory 对话记忆** - 实现内存和 Redis 和 MySQL 三种存储方式，支持滑动窗口和会话隔离
+4. **工具调用（Function Calling）** - 完整支持 AI 调用外部工具，自动保存工具调用消息链，流程全透明
+5. **流式输出支持** - 同时支持同步调用和流式输出，提供更好的用户体验
+6. **DeepSeek 模型集成** - 完整对接 DeepSeek Chat API，支持工具调用和流式输出
+
+#### 核心亮点
+
+- **Spring AI 对齐** - 架构设计完全参考 Spring AI，代码风格和接口设计高度一致
+- **完整消息链** - 自动保存工具调用的所有中间步骤，支持多轮对话引用历史
+- **向后兼容** - 通过 @Deprecated 标记旧接口，保证现有代码平滑升级
+- **测试完善** - 4 个完整的集成测试，覆盖同步调用、流式调用、工具使用等场景
+- **文档详尽** - 详细的代码注释、README 说明和实际测试结果展示
+
+#### 学到了什么
+
+通过本篇章的实现，你将掌握：
+
+- **AI 应用架构设计** - 如何设计一个可扩展的 AI 对话框架
+- **Builder 模式实践** - ChatClient 的流式构建器设计
+- **责任链模式** - Advisor 链式调用的完整实现
+- **策略模式** - ChatMemory 多种存储策略的切换
+- **模板方法模式** - Prompt 模板系统的设计
+- **接口设计原则** - 如何设计清晰、可扩展的接口
+- **向后兼容策略** - 如何在升级接口的同时保持兼容性
+- **企业级实践** - 日志记录、异常处理、测试覆盖等最佳实践
+
+#### 下一站：AI-RAG
+
+有了 ChatClient 基础，我们即将进入更高级的 **RAG（Retrieval-Augmented Generation）检索增强生成** 领域：
+
+- 文档加载与智能分块
+- 语义检索与向量数据库
+- Embedding 模型集成
+- RAG 模式完整实现
+- 知识库问答系统
 
 
 ---
