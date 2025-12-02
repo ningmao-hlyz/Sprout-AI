@@ -6920,6 +6920,141 @@ private String selectModelByTask(String taskType) {
 
 ---
 
+## RAG
+
+### 文档处理与分块
+
+> 代码分支: rag-document-processing
+
+#### 核心组件
+
+**1. Document - 文档对象**
+
+不可变的文档实体，包含内容和元数据，支持 Builder 模式构建。
+
+```java
+// 基本创建
+Document doc = new Document("文档内容");
+
+// Builder 模式（推荐）
+Document doc = Document.builder()
+    .content("Spring Framework 是...")
+    .metadata("source", "官方文档")
+    .metadata("category", "技术文档")
+    .build();
+```
+
+**设计特点：**
+- 不可变对象（线程安全）
+- 基于 ID 的相等性判断
+- 自动生成唯一 ID
+- 元数据隔离保护
+
+**2. DocumentReader - 文档读取器**
+
+统一的文档读取接口，`TextDocumentReader` 实现支持字符串和文件读取。
+
+```java
+// 从字符串读取
+TextDocumentReader reader1 = new TextDocumentReader("文本内容");
+List<Document> docs = reader1.read();
+
+// 从文件读取
+TextDocumentReader reader2 = TextDocumentReader.builder()
+    .filePath("knowledge.txt")
+    .metadata("source", "知识库")
+    .build();
+List<Document> docs = reader2.read();
+```
+
+**特点：**
+- 文件读取自动添加元数据（文件名、路径）
+- 支持自定义字符编码
+- Builder 模式灵活构建
+
+**3. TextSplitter - 文档分块器**
+
+实现 `DocumentTransformer` 接口，提供三种分块策略：
+
+| 策略 | 适用场景 | 特点 |
+|------|---------|------|
+| CharacterTextSplitter | 通用文本 | 按固定字符数切分，简单可控 |
+| ParagraphTextSplitter | 结构化文档 | 按段落切分，保持语义完整 |
+| SentenceTextSplitter | 精细分块 | 按句子切分，最佳语义连贯性 |
+
+```java
+// 策略1：按字符分块
+CharacterTextSplitter charSplitter = new CharacterTextSplitter(100, 20);
+List<Document> chunks = charSplitter.split(document);
+
+// 策略2：按段落分块
+ParagraphTextSplitter paraSplitter = new ParagraphTextSplitter(500, 50);
+List<Document> chunks = paraSplitter.split(document);
+
+// 策略3：按句子分块  
+SentenceTextSplitter sentSplitter = new SentenceTextSplitter(200, 30);
+List<Document> chunks = sentSplitter.split(document);
+```
+
+
+
+#### 设计模式
+
+**DocumentTransformer 接口：**
+```java
+@FunctionalInterface
+public interface DocumentTransformer extends Function<List<Document>, List<Document>> {
+    List<Document> apply(List<Document> documents);
+}
+```
+
+**模板方法模式：**
+```java
+public abstract class TextSplitter implements DocumentTransformer {
+    // 模板方法
+    public List<Document> split(Document document) {
+        List<String> textChunks = splitText(document.getContent());
+        // 创建 Document 对象，自动传递元数据
+    }
+    
+    // 子类实现具体策略
+    protected abstract List<String> splitText(String text);
+}
+```
+
+#### 测试
+
+测试类：`DocumentProcessingTest.java`
+
+```java
+@Test
+public void testDocumentReader() {
+    // 测试字符串读取、文件读取、Builder 模式
+}
+
+@Test
+public void testTextSplitting() {
+    // 测试基本分块、参数验证、重叠验证、元数据传递
+}
+
+@Test
+public void testMultipleSplitters() {
+    // 对比三种分块策略
+    CharacterTextSplitter charSplitter = new CharacterTextSplitter(30, 5);
+    ParagraphTextSplitter paraSplitter = new ParagraphTextSplitter(100);
+    SentenceTextSplitter sentSplitter = new SentenceTextSplitter(50, 10);
+    
+    // 验证不同策略的分块效果
+}
+
+@Test
+public void testCompleteFlow() {
+    // 端到端流程：读取 → 分块 → 验证
+}
+```
+
+---
+
 # 其他
 
 - 微信：ningmaohlyz
