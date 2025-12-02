@@ -257,7 +257,7 @@ Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring
 - [ ] RAG 文档检索增强
 - [ ] 向量数据库集成
 - [ ] Embedding 模型支持
-- [ ] 策略模式+配置文件实现多模型切换
+- [x] 多模型切换支持（策略模式 + 工厂模式）
 
 
 # IOC
@@ -6721,6 +6721,158 @@ List<Message> history = chatMemory.get("user-456", -1);
 
 ---
 
+### 多模型切换支持
+
+> 代码分支: chat-model-switching-support
+
+参考 Spring AI 的设计理念，通过 **ChatModelFactory**（工厂模式）+ **MockChatModel**（模拟实现）实现优雅的多模型管理和动态切换。
+
+#### 核心组件
+
+ 1. ChatModelFactory
+
+统一管理多个 AI 模型实例，支持动态注册、查询和切换。
+
+**主要功能：**
+- 模型注册与移除
+- 默认模型管理
+- 模型查询与验证
+
+ 2. MockChatModel
+
+模拟 AI 模型实现，与 `DeepSeekChatModel` 架构一致，用于测试和演示，不依赖真实 API。
+
+**设计特点：**
+- 实现 `StreamingChatModel` 接口
+- 支持自定义响应模板
+- 支持 `ChatOptions` 配置
+- 完整的同步和流式调用
+
+
+#### 测试
+
+`MultiModelSwitchTest.java`
+
+```java
+    private ChatModelFactory modelFactory;
+
+
+@BeforeEach
+public void setUp() {
+    // 1. 创建工厂实例
+    modelFactory = new ChatModelFactory();
+
+    // 2. 注册模拟模型（用于测试，不需要 API）
+    modelFactory.register("gpt-4", new MockChatModel(
+            "gpt-4",
+            "[GPT-4 模拟] 您的问题：{input}"
+    ));
+
+    modelFactory.register(new MockChatModel(
+            "claude-3",
+            "[Claude-3 模拟] 收到消息：{input}"
+    ));
+
+    modelFactory.register(new MockChatModel(
+            "qwen-max",
+            "[通义千问 模拟] 您问：{input}"
+    ));
+
+    // 3. 注册真实的 DeepSeek 模型
+    ClassPathXmlApplicationContext applicationContext =
+            new ClassPathXmlApplicationContext("classpath:ai-config.xml");
+
+    ChatModel chatModel = applicationContext.getBean("chatModel", ChatModel.class);
+    modelFactory.register( chatModel);
+
+}
+
+/**
+ * 测试1：基本的模型切换和对比
+ */
+@Test
+public void testModelSwitchAndComparison() {
+    System.out.println("\n===== 测试模型切换与对比 =====");
+
+    String prompt = "解释什么是依赖注入";
+
+    // 遍历所有模型，同一问题获得不同响应
+    for (String modelName : modelFactory.getModelNames()) {
+        System.out.println("\n【" + modelName + "】");
+        ChatModel model = modelFactory.getModel(modelName);
+        ChatClient client = ChatClient.create(model);
+        String response = client.prompt(prompt).call().content();
+        System.out.println("响应: " + response);
+
+        // 验证响应不为空
+        assertThat(response).isNotEmpty();
+    }
+}
+
+/**
+ * 测试2：流式输出（模拟模型 + 真实 DeepSeek）
+ */
+@Test
+public void testStreamingOutput() {
+    System.out.println("\n===== 测试流式输出 =====");
+
+    // 模拟模型流式输出
+    System.out.print("\n【GPT-4 模拟流式】 ");
+    ChatModel gpt4 = modelFactory.getModel("gpt-4");
+    ChatClient.create(gpt4)
+            .prompt("讲个笑话")
+            .stream()
+            .content(chunk -> System.out.print(chunk));
+
+    // DeepSeek 流式输出（真实或模拟）
+    System.out.print("\n\n【DeepSeek 流式】 ");
+    ChatModel deepseek = modelFactory.getModel("deepseek-chat");
+    ChatClient.create(deepseek)
+            .prompt("讲个笑话")
+            .stream()
+            .content(chunk -> System.out.print(chunk));
+
+    System.out.println("\n");
+}
+
+/**
+ * 测试3：动态模型选择策略
+ */
+@Test
+public void testDynamicModelSelection() {
+    System.out.println("\n===== 测试动态模型选择 =====");
+
+    // 根据任务类型选择最合适的模型
+    String taskType = "code";  // 编程任务
+    String selectedModel = selectModelByTask(taskType);
+
+    System.out.println("任务类型: " + taskType + " -> 选择模型: " + selectedModel);
+
+    ChatModel model = modelFactory.getModel(selectedModel);
+    String response = ChatClient.create(model)
+            .prompt("写个快速排序算法")
+            .call()
+            .content();
+
+    System.out.println("响应: " + response);
+    assertThat(response).isNotEmpty();
+}
+
+/**
+ * 根据任务类型选择模型（策略模式示例）
+ */
+private String selectModelByTask(String taskType) {
+    return switch(taskType) {
+        case "code" -> "gpt-4";              // 编程任务
+        case "analysis" -> "claude-3";       // 文本分析
+        case "chinese" -> "deepseek-chat";   // 中文对话
+        default -> "qwen-max";               // 通用问答
+    };
+}
+```
+
+---
+
 ###  AI-Chat 篇章结语
 
 在参考Spring AI的架构设计下，这篇章我们实现了一个**企业级 AI 对话应用框架**的核心功能：
@@ -6733,13 +6885,13 @@ List<Message> history = chatMemory.get("user-456", -1);
 4. **工具调用（Function Calling）** - 完整支持 AI 调用外部工具，自动保存工具调用消息链，流程全透明
 5. **流式输出支持** - 同时支持同步调用和流式输出，提供更好的用户体验
 6. **DeepSeek 模型集成** - 完整对接 DeepSeek Chat API，支持工具调用和流式输出
+7. **多模型切换支持** - 通过 ChatModelFactory 实现策略模式 + 工厂模式，支持动态切换多个 AI 模型
 
 #### 核心亮点
 
 - **Spring AI 对齐** - 架构设计完全参考 Spring AI，代码风格和接口设计高度一致
 - **完整消息链** - 自动保存工具调用的所有中间步骤，支持多轮对话引用历史
-- **向后兼容** - 通过 @Deprecated 标记旧接口，保证现有代码平滑升级
-- **测试完善** - 4 个完整的集成测试，覆盖同步调用、流式调用、工具使用等场景
+- **测试完善** - 完整的集成测试，覆盖同步调用、流式调用、工具使用等场景
 - **文档详尽** - 详细的代码注释、README 说明和实际测试结果展示
 
 #### 学到了什么

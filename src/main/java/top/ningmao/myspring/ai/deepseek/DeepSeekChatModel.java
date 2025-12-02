@@ -70,6 +70,14 @@ public class DeepSeekChatModel implements StreamingChatModel {
     }
 
     @Override
+    public String getModelName() {
+        // 从 defaultOptions 获取模型名称
+        return defaultOptions != null && defaultOptions.getModel() != null 
+            ? defaultOptions.getModel() 
+            : "deepseek-chat";
+    }
+
+    @Override
     public ChatResponse call(Prompt prompt) {
         ChatOptions options = prompt.getOptions() != null ? prompt.getOptions() : defaultOptions;
         
