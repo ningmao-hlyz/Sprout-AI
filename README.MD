@@ -256,7 +256,7 @@ Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring
 
 - [ ] RAG 文档检索增强
 - [ ] 向量数据库集成
-- [ ] Embedding 模型支持
+- [x] Embedding 模型支持
 - [x] 多模型切换支持（策略模式 + 工厂模式）
 
 
@@ -7050,6 +7050,95 @@ public void testMultipleSplitters() {
 @Test
 public void testCompleteFlow() {
     // 端到端流程：读取 → 分块 → 验证
+}
+```
+
+---
+
+### Embedding 向量化
+
+> 代码分支: rag-embedding
+
+实现文本向量化功能，将文本转换为高维向量表示，为向量检索和语义搜索奠定基础。
+
+#### 核心组件
+
+**1. EmbeddingModel - 嵌入模型接口**
+
+统一的向量化接口，支持单个文本、批量文本和 Document 对象的嵌入。
+
+```java
+public interface EmbeddingModel {
+    // 核心方法
+    EmbeddingResponse call(EmbeddingRequest request);
+    
+    // 便捷方法
+    float[] embed(String text);
+    float[] embed(Document document);
+    List<float[]> embed(List<String> texts);
+    EmbeddingResponse embedForResponse(List<String> texts);
+    int dimensions();
+}
+```
+
+**2. Embedding - 嵌入结果**
+
+单个文本的向量表示，包含向量数据和元数据。
+
+```java
+// 创建
+Embedding embedding = new Embedding(vector, index);
+
+// 获取信息
+float[] vector = embedding.getEmbedding();
+int dimension = embedding.getDimension();
+Integer index = embedding.getIndex();
+```
+
+**3. HuggingFaceEmbeddingModel - 具体实现**
+
+基于 HuggingFace Lightweight Embeddings API 的向量化实现，**免费使用，无需 API Key**。
+
+```java
+// 创建模型（使用默认模型 embeddinggemma-300m）
+EmbeddingModel embeddingModel = new HuggingFaceEmbeddingModel();
+
+// 或指定模型
+EmbeddingModel embeddingModel = new HuggingFaceEmbeddingModel("multilingual-e5-base");
+
+// 单个文本嵌入
+float[] vector = embeddingModel.embed("Spring Framework 是一个企业级框架");
+
+// 批量嵌入
+List<float[]> vectors = embeddingModel.embed(List.of(
+    "文本1", 
+    "文本2", 
+    "文本3"
+));
+
+// Document 嵌入
+Document doc = new Document("RAG 检索增强生成");
+float[] docVector = embeddingModel.embed(doc);
+```
+
+#### 测试
+
+测试类：`EmbeddingModelTest.java`
+
+```java
+@Test
+public void testEmbedSingleText() {
+    // 单个文本嵌入
+}
+
+@Test
+public void testEmbedMultipleTexts() {
+    // 批量嵌入
+}
+
+@Test
+public void testSimilarity() {
+    // 相似度计算
 }
 ```
 
