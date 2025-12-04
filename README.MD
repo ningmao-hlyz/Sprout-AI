@@ -129,7 +129,19 @@ Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring
 - [x] JdbcChatMemoryRepository（MySQL存储）
 - [x] MessageWindowChatMemory（滑动窗口）
 - [x] MessageChatMemoryAdvisor（自动保存历史）
+- [x] QuestionAnswerAdvisor（RAG 检索增强）
 - [x] 对话隔离与会话管理
+
+#### VectorStore & RAG
+
+- [x] VectorStore 统一接口设计
+- [x] SimpleVectorStore（内存向量存储）
+- [x] RedisVectorStore（Redis Stack + HNSW 索引）
+- [x] HuggingFace Embedding Model 集成
+- [x] 余弦相似度搜索
+- [x] Top-K + 阈值过滤
+- [x] 向量持久化（JSON / Redis）
+- [x] RAG 自动检索与上下文注入
 
 
 
@@ -254,10 +266,15 @@ Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring
 
 ### AI 应用扩展
 
-- [ ] RAG 文档检索增强
-- [x] 向量数据库集成
-- [x] Embedding 模型支持
+- [x] 向量数据库集成（SimpleVectorStore + RedisVectorStore）
+- [x] Embedding 模型支持（HuggingFaceEmbeddingModel）
 - [x] 多模型切换支持（策略模式 + 工厂模式）
+- [x] QuestionAnswerAdvisor（RAG 检索增强 Advisor）
+- [x] 文档加载器（TextDocumentReader、MarkdownDocumentReader）
+- [x] 文档分块策略（CharacterTextSplitter、ParagraphTextSplitter、SentenceTextSplitter）
+- [ ] Reranking（重排序优化检索结果）
+- [ ] 多路召回
+- [ ] 更完善的文档解析器
 
 
 # IOC
@@ -7264,47 +7281,146 @@ brew tap redis-stack/redis-stack
 brew install redis-stack
 ```
 
+---
+
+###  QuestionAnswerAdvisor - RAG 检索增强
+
+> 代码分支: `rag-question-answer-advisor`
+
+QuestionAnswerAdvisor 是 RAG（检索增强生成）的核心组件，它将 VectorStore 与 ChatClient 无缝集成，自动从知识库检索相关文档并注入到上下文中。
+
+#### 核心组件
+
+`QuestionAnswerAdvisor.java`
+
+```java
+public class QuestionAnswerAdvisor implements Advisor {
+    @Override
+    public Prompt adviseRequest(Prompt prompt, Map<String, Object> params) {
+        // 1. 提取用户问题
+        String userQuestion = extractUserQuestion(prompt);
+        if (userQuestion == null || userQuestion.isBlank()) {
+            return prompt;
+        }
+
+        // 2. 向量检索相关文档
+        List<Document> relevantDocs = vectorStore.similaritySearch(
+                SearchRequest.builder()
+                        .query(userQuestion)
+                        .topK(topK)
+                        .similarityThreshold(similarityThreshold)
+                        .build()
+        );
+
+        // 3. 构建上下文文本
+        String context = buildContext(relevantDocs);
+
+        // 4. 将检索到的文档存入 params，便于在 adviseResponse 中访问
+        // params 由 ChatClient 保证不为 null
+        params.put(RETRIEVED_DOCUMENTS, relevantDocs);
+
+        // 5. 构建增强的 System Message
+        String enhancedSystemMessage = userTextAdvise.replace("{question_answer_context}", context);
+
+        // 6. 创建新的消息列表（添加 System Message）
+        List<Message> newMessages = new ArrayList<>();
+        newMessages.add(new SystemMessage(enhancedSystemMessage));
+        newMessages.addAll(prompt.getMessages());
+
+        // 7. 创建新的 Prompt
+        return new Prompt(newMessages, prompt.getOptions());
+    }
+
+    @Override
+    public ChatResponse adviseResponse(ChatResponse response, Map<String, Object> params) {
+        // 将检索到的文档添加到 ChatResponse metadata
+        if (params != null && params.containsKey(RETRIEVED_DOCUMENTS)) {
+            @SuppressWarnings("unchecked")
+            List<Document> retrievedDocs = (List<Document>) params.get(RETRIEVED_DOCUMENTS);
+
+            // 添加到 response metadata
+            Map<String, Object> metadata = response.getMetadata();
+            if (metadata == null) {
+                metadata = new HashMap<>();
+            }
+            metadata.put(RETRIEVED_DOCUMENTS, retrievedDocs);
+        }
+
+        return response;
+    }
+}
+```
+
+#### 工作原理
+
+```
+用户问题 → QuestionAnswerAdvisor.adviseRequest()
+          ↓
+      1. 提取用户问题
+          ↓
+      2. VectorStore.similaritySearch()
+          ↓
+      3. 构建增强的 System Message：
+         "Context: <检索到的文档>
+          问题: <用户问题>"
+          ↓
+      4. 注入到 Prompt
+          ↓
+      LLM 生成答案（基于检索的上下文）
+          ↓
+      QuestionAnswerAdvisor.adviseResponse()
+          ↓
+      将检索文档存入 ChatResponse.metadata
+```
+
 #### 测试
 
- `VectorStoreIntegrationTest.java`
+QuestionAnswerAdvisorTest.java
+
+其中一个是这样，挺简单的
+```java
+@Test
+@Order(1)
+@DisplayName("测试1：基本 RAG 检索")
+public void testBasicRAG() {
+    Assumptions.assumeTrue(chatModel != null, "需要设置 DEEPSEEK_API_KEY");
+
+    System.out.println("\n===== 测试基本 RAG 检索 =====");
+
+    // 1. 创建 QuestionAnswerAdvisor
+    QuestionAnswerAdvisor qaAdvisor = QuestionAnswerAdvisor.builder()
+            .vectorStore(vectorStore)
+            .topK(2)
+            .similarityThreshold(0.6)
+            .build();
+
+    // 2. 创建 ChatClient
+    ChatClient chatClient = ChatClient.builder(chatModel)
+            .defaultAdvisors(qaAdvisor)
+            .build();
+
+    // 3. 提问
+    String question = "Spring Boot 有什么特点？";
+    System.out.println("问题: " + question);
+
+    String answer = chatClient.prompt()
+            .user(question)
+            .call()
+            .content();
+
+    System.out.println("回答: " + answer);
+
+    // 验证回答包含关键词
+    Assertions.assertTrue(
+            answer.contains("自动配置") || answer.contains("简化") || answer.contains("Spring Boot"),
+            "回答应该包含 Spring Boot 相关内容"
+    );
+
+    System.out.println("✓ 基本 RAG 测试通过");
+}
+```
 
 
- ** SimpleVectorStore 测试**
-
-* **添加文档**：向量化后写入内存向量库
-* **相似性搜索**：基于 embedding 实现 KNN 搜索
-* **SearchRequest 高级查询**：支持 Top-K、阈值过滤等
-* **删除文档**：按文档 ID 删除
-* **持久化**：向量库保存为 JSON，并支持重新加载
-* **RAG 流程测试**：
-
-    * 构建知识库 → 向量化 → 检索文档
-    * 生成增强提示词（用于 LLM）
-
-测试过程中嵌入模型使用 HuggingFaceEmbeddingModel，并自动加入延迟以避免 API 限流。
-
-
- ** RedisVectorStore 测试（基于 Redis Stack）**
-
-此部分测试需要本地运行 **Redis Stack (RediSearch + JSON + 向量索引)**。
-
-主要验证内容：
-
- **1. 自动创建 HNSW 向量索引**
-
-* 添加文档时自动创建 RedisSearch 索引
-* 使用 `VECTOR HNSW` 执行 ANN 索引
-
- **2. Redis KNN 向量搜索**
-
-* 基于 HNSW + Cosine 的近似最近邻搜索
-* 验证 Top-K、阈值过滤
-* 输出相似文档得分
-
- **3. Redis 持久化**
-
-* Redis 重启后数据仍然存在（依赖 RDB/AOF）
-* 再次连接依旧可以读到向量库中的文档
 
 
 
