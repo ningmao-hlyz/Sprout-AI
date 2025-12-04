@@ -26,6 +26,11 @@ public class Document {
      * 文档元数据（来源、分类、时间戳等）
      */
     private final Map<String, Object> metadata;
+    
+    /**
+     * 相似度分数（用于向量搜索结果，0-1之间）
+     */
+    private final Double score;
 
     /**
      * 构造函数 - 只提供内容
@@ -33,7 +38,7 @@ public class Document {
      * @param content 文档内容
      */
     public Document(String content) {
-        this(content, new HashMap<>());
+        this(content, new HashMap<>(), null);
     }
 
     /**
@@ -43,7 +48,14 @@ public class Document {
      * @param metadata 元数据
      */
     public Document(String content, Map<String, Object> metadata) {
-        this(generateId(), content, metadata);
+        this(generateId(), content, metadata, null);
+    }
+    
+    /**
+     * 构造函数 - 内容 + 元数据 + 分数
+     */
+    public Document(String content, Map<String, Object> metadata, Double score) {
+        this(generateId(), content, metadata, score);
     }
 
     /**
@@ -52,8 +64,9 @@ public class Document {
      * @param id       文档ID
      * @param content  文档内容
      * @param metadata 元数据
+     * @param score    相似度分数
      */
-    public Document(String id, String content, Map<String, Object> metadata) {
+    public Document(String id, String content, Map<String, Object> metadata, Double score) {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Document ID cannot be null or empty");
         }
@@ -63,6 +76,7 @@ public class Document {
         this.id = id;
         this.content = content;
         this.metadata = metadata != null ? new HashMap<>(metadata) : new HashMap<>();
+        this.score = score;
     }
 
     /**
@@ -102,6 +116,13 @@ public class Document {
     public Object getMetadata(String key) {
         return metadata.get(key);
     }
+    
+    /**
+     * 获取相似度分数
+     */
+    public Double getScore() {
+        return score;
+    }
 
     /**
      * Builder 模式
@@ -114,6 +135,7 @@ public class Document {
         private String id;
         private String content;
         private final Map<String, Object> metadata = new HashMap<>();
+        private Double score;
 
         /**
          * 设置文档 ID
@@ -148,13 +170,21 @@ public class Document {
             this.metadata.put(key, value);
             return this;
         }
+        
+        /**
+         * 设置相似度分数
+         */
+        public Builder score(Double score) {
+            this.score = score;
+            return this;
+        }
 
         /**
          * 构建 Document 对象
          */
         public Document build() {
             String docId = (id != null && !id.isBlank()) ? id : generateId();
-            return new Document(docId, content, metadata);
+            return new Document(docId, content, metadata, score);
         }
     }
 

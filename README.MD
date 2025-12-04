@@ -255,7 +255,7 @@ Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring
 ### AI 应用扩展
 
 - [ ] RAG 文档检索增强
-- [ ] 向量数据库集成
+- [x] 向量数据库集成
 - [x] Embedding 模型支持
 - [x] 多模型切换支持（策略模式 + 工厂模式）
 
@@ -7141,6 +7141,308 @@ public void testSimilarity() {
     // 相似度计算
 }
 ```
+
+---
+
+###  Vector Store - 向量存储
+
+> 代码分支: rag-vector-store`
+
+向量存储是 RAG 系统的核心组件，负责存储文档向量并提供高效的相似性搜索。
+
+#### 核心组件
+
+**1. SearchRequest - 搜索请求**
+
+封装搜索参数的类，支持 Builder 模式：
+
+```java
+SearchRequest request = SearchRequest.builder()
+    .query("Spring 框架")              // 查询文本
+    .topK(5)                           // 返回 Top-5 结果
+    .similarityThreshold(0.7)          // 相似度阈值 >= 0.7
+    .build();
+```
+
+**2. VectorStoreRetriever - 只读检索接口**
+
+遵循最小权限原则的只读接口：
+
+```java
+@FunctionalInterface
+public interface VectorStoreRetriever {
+    List<Document> similaritySearch(SearchRequest request);
+    
+    default List<Document> similaritySearch(String query) {
+        return similaritySearch(SearchRequest.builder()
+            .query(query).build());
+    }
+}
+```
+
+**2. VectorStore - 完整向量存储接口**
+
+扩展 VectorStoreRetriever，添加写入能力：
+
+```java
+public interface VectorStore extends VectorStoreRetriever {
+    void add(List<Document> documents);      // 添加文档
+    void delete(List<String> idList);        // 删除文档
+    int size();                              // 存储大小
+}
+```
+
+**4. SimpleVectorStore - 内存向量存储实现**
+
+基于 ConcurrentHashMap 的线程安全实现：
+
+```java
+EmbeddingModel embeddingModel = new HuggingFaceEmbeddingModel();
+VectorStore vectorStore = new SimpleVectorStore(embeddingModel);
+```
+
+#### 使用示例
+
+**完整的 RAG 流程：**
+
+```java
+// 1. 创建向量存储
+EmbeddingModel embeddingModel = new HuggingFaceEmbeddingModel();
+VectorStore vectorStore = new SimpleVectorStore(embeddingModel);
+
+// 2. 准备知识库文档
+List<Document> knowledgeBase = List.of(
+    Document.builder()
+        .content("Spring Framework 是一个开源的 Java 应用框架")
+        .metadata("category", "framework")
+        .build(),
+    Document.builder()
+        .content("Spring Boot 提供了自动配置功能")
+        .metadata("category", "framework")
+        .build(),
+    Document.builder()
+        .content("Spring Cloud 用于构建微服务")
+        .metadata("category", "framework")
+        .build()
+);
+
+// 3. 向量化并存储
+vectorStore.add(knowledgeBase);
+System.out.println("存储大小: " + vectorStore.size());
+
+// 4. 用户问题
+String userQuestion = "如何简化 Spring 应用的配置？";
+
+// 5. 检索相关文档
+SearchRequest searchRequest = SearchRequest.builder()
+    .query(userQuestion)
+    .topK(2)
+    .similarityThreshold(0.6)
+    .build();
+
+List<Document> relevantDocs = vectorStore.similaritySearch(searchRequest);
+
+// 6. 查看检索结果
+relevantDocs.forEach(doc -> {
+    System.out.printf("[%.3f] %s%n", doc.getScore(), doc.getContent());
+});
+
+// 7. 构建增强提示词（RAG 核心）
+StringBuilder context = new StringBuilder("参考以下信息回答问题：\n\n");
+relevantDocs.forEach(doc -> 
+    context.append("- ").append(doc.getContent()).append("\n")
+);
+context.append("\n问题：").append(userQuestion);
+
+// 8. 发送给 LLM 生成答案
+String answer = chatModel.call(context.toString());
+```
+
+#### 设计特点
+
+- **接口分离**：VectorStoreRetriever（只读）+ VectorStore（读写）
+- **Builder 模式**：SearchRequest 支持流式构建
+- **余弦相似度**：使用标准的余弦相似度算法
+- **线程安全**：SimpleVectorStore 基于 ConcurrentHashMap
+- **相似度过滤**：支持设置阈值过滤低相关性文档
+- **Top-K 搜索**：返回最相似的 K 个文档
+- **分数排序**：结果按相似度降序排列
+- **元数据支持**：文档可携带任意元数据
+
+#### 相似度计算
+
+余弦相似度公式：
+
+```
+similarity = (A · B) / (||A|| × ||B||)
+```
+
+- 范围：0-1，值越大越相似
+- 0：完全不相关
+- 1：完全相同
+
+#### 测试
+
+测试类：`VectorStoreTest.java`
+
+```java
+@Test
+public void testCompleteRAGFlow() {
+    // 1. 加载知识库
+    vectorStore.add(knowledgeBase);
+    
+    // 2. 检索相关文档
+    List<Document> results = vectorStore.similaritySearch(
+        SearchRequest.builder()
+            .query("Spring Boot 简化配置")
+            .topK(2)
+            .similarityThreshold(0.6)
+            .build()
+    );
+    
+    // 3. 构建增强提示
+    String enhancedPrompt = buildPrompt(results, userQuestion);
+    
+    // 4. 发送给 LLM
+    String answer = chatModel.call(enhancedPrompt);
+}
+```
+
+**测试覆盖：**
+- ✅ 添加/删除文档
+- ✅ 相似性搜索
+- ✅ SearchRequest 参数
+- ✅ Top-K 限制
+- ✅ 相似度阈值
+- ✅ 完整 RAG 流程
+
+#### 持久化支持
+
+**SimpleVectorStore - JSON 序列化：**
+
+```java
+// 保存到文件
+vectorStore.save("vector-store.json");
+
+// 从文件加载
+vectorStore.load("vector-store.json");
+```
+
+**RedisVectorStore - Redis 持久化：**
+
+```java
+// 连接本机 Redis
+EmbeddingModel embeddingModel = new HuggingFaceEmbeddingModel();
+VectorStore vectorStore = new RedisVectorStore(embeddingModel);
+
+// 或指定 Redis 地址
+VectorStore vectorStore = new RedisVectorStore(
+    embeddingModel, 
+    "localhost", 
+    6379
+);
+
+// 添加文档（自动持久化到 Redis）
+vectorStore.add(documents);
+
+// 搜索（从 Redis 读取）
+List<Document> results = vectorStore.similaritySearch(query);
+
+// 关闭连接
+((RedisVectorStore) vectorStore).close();
+```
+
+**Redis 数据结构：**
+```
+Key: vector:{documentId}
+Value: JSON {id, content, metadata, embedding}
+```
+
+#### VectorStore 实现对比
+
+| 特性 | SimpleVectorStore | RedisVectorStore |
+|------|------------------|------------------|
+| **存储方式** | 内存 | Redis Hash |
+| **持久化** | JSON 文件 | Redis RDB/AOF |
+| **向量检索** | 内存遍历 | RediSearch HNSW |
+| **向量索引** | ❌ | ✅ HNSW |
+| **距离度量** | Cosine | Cosine |
+| **性能** | 中等 | 极快 |
+| **分布式** | ❌ | ✅ |
+| **数据量** | < 10,000 | 百万级 |
+| **适用场景** | 开发/测试 | 生产环境 |
+
+#### RedisVectorStore：Redis Stack 向量检索
+
+**技术栈**：
+```
+Redis Stack = Redis + RediSearch + RedisJSON
+```
+
+**核心特性**：
+1. **Redis Hash**：存储文档数据（JSON 格式）
+2. **RediSearch VECTOR**：建立 HNSW 向量索引
+3. **FT.SEARCH**：执行 KNN 相似度搜索（Cosine 距离）
+4. **性能**：毫秒级检索，支持百万级数据
+5. **分布式**：原生支持 Redis 集群
+
+**安装 Redis Stack**：
+```bash
+# Docker 方式（推荐）
+docker run -d -p 6379:6379 redis/redis-stack:latest
+
+# 或使用 Docker Compose
+docker-compose up -d
+```
+
+**使用示例**：
+```java
+// 1. 创建 RedisVectorStore
+EmbeddingModel embeddingModel = new HuggingFaceEmbeddingModel();
+VectorStore vectorStore = new RedisVectorStore(embeddingModel);
+
+// 2. 添加文档（自动创建 HNSW 索引）
+List<Document> documents = List.of(
+    new Document("Spring Framework 是企业级 Java 框架"),
+    new Document("Spring Boot 简化 Spring 开发")
+);
+vectorStore.add(documents);
+
+// 3. 向量搜索（使用 FT.SEARCH + KNN）
+SearchRequest request = SearchRequest.builder()
+    .query("Spring 框架")
+    .topK(5)
+    .similarityThreshold(0.7)
+    .build();
+
+List<Document> results = vectorStore.similaritySearch(request);
+```
+
+**索引创建**：
+```redis
+# 自动创建的索引结构
+FT.CREATE spring-ai-vector-index 
+  ON HASH 
+  PREFIX 1 embedding: 
+  SCHEMA 
+    id TAG 
+    content TEXT 
+    embedding VECTOR HNSW 6 
+      TYPE FLOAT32 
+      DIM 768 
+      DISTANCE_METRIC COSINE
+```
+
+**向量搜索**：
+```redis
+# KNN 搜索（Top-K 最相似）
+FT.SEARCH spring-ai-vector-index 
+  "*=>[KNN 5 @embedding $BLOB]" 
+  PARAMS 2 BLOB <query_vector> 
+  RETURN 2 id content 
+  DIALECT 2
+```
+
 
 ---
 
