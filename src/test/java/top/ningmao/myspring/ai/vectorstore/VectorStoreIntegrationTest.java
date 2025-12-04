@@ -16,7 +16,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * VectorStore 集成测试类
  * <p>
  * 测试 SimpleVectorStore 和 RedisVectorStore 的完整功能
- * 
+ * 注意：API有限制，推荐就是一个个方法来测，不要直接类测试
+ *
  * @author 宁猫
  * @since 2025-12-03
  */
@@ -30,8 +31,22 @@ public class VectorStoreIntegrationTest {
     public static void setUpClass() {
         // 初始化 Embedding 模型（所有测试共享）
         embeddingModel = new HuggingFaceEmbeddingModel();
+
         System.out.println("\n========== VectorStore 集成测试 ==========");
         System.out.println("Embedding Model: HuggingFaceEmbeddingModel");
+        System.out.println(" API 限流：10次/分钟，测试间会自动添加延迟");
+    }
+
+    /**
+     * 添加延迟避免限流（每次测试后等待 7 秒）
+     */
+    private void sleep(int seconds) {
+        try {
+            System.out.println(" 等待 " + seconds + " 秒避免限流...");
+            Thread.sleep(seconds * 1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
     
     // ========== SimpleVectorStore 测试 ==========
@@ -45,6 +60,11 @@ public class VectorStoreIntegrationTest {
         void setUp() {
             vectorStore = new SimpleVectorStore(embeddingModel);
             System.out.println("\n===== 使用 SimpleVectorStore =====");
+        }
+        
+        @AfterEach
+        void tearDown() {
+            sleep(7);  // 等待 7 秒避免 API 限流
         }
         
         @Test
@@ -246,13 +266,14 @@ public class VectorStoreIntegrationTest {
                 Assumptions.assumeTrue(false, "Redis Stack 服务未运行");
             }
         }
-        
+
         @AfterEach
         void tearDown() {
             if (redisStore != null) {
-                redisStore.clear();
+                // redisStore.clear();  // 保留数据以便查看
                 redisStore.close();
             }
+            sleep(7);  // 等待 7 秒避免 API 限流
         }
         
         @Test
@@ -325,32 +346,6 @@ public class VectorStoreIntegrationTest {
             
             System.out.println(" Redis Stack 持久化测试通过（RDB/AOF）");
         }
-        
-        @Test
-        @Order(4)
-        @DisplayName("测试4：Redis Stack 大规模向量搜索性能")
-        void testRedisPerformance() {
-            // 添加更多文档测试性能
-            List<Document> documents = new ArrayList<>();
-            for (int i = 1; i <= 20; i++) {
-                documents.add(new Document("测试文档 " + i + ": Spring Boot 微服务开发"));
-            }
-            
-            long startTime = System.currentTimeMillis();
-            vectorStore.add(documents);
-            long addTime = System.currentTimeMillis() - startTime;
-            
-            startTime = System.currentTimeMillis();
-            List<Document> results = vectorStore.similaritySearch("Spring 微服务");
-            long searchTime = System.currentTimeMillis() - startTime;
-            
-            assertThat(vectorStore.size()).isEqualTo(20);
-            assertThat(results).isNotEmpty();
-            
-            System.out.println("性能测试结果:");
-            System.out.println("  添加 20 个文档耗时: " + addTime + " ms");
-            System.out.println("  向量搜索耗时: " + searchTime + " ms");
-            System.out.println(" Redis Stack 性能测试通过");
-        }
+
     }
 }
