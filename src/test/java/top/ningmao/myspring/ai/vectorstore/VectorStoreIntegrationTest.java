@@ -6,6 +6,7 @@ import top.ningmao.myspring.ai.embedding.EmbeddingModel;
 import top.ningmao.myspring.ai.huggingface.HuggingFaceEmbeddingModel;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;

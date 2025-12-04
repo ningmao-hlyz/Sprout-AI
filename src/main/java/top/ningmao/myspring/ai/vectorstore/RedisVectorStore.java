@@ -1,10 +1,15 @@
 package top.ningmao.myspring.ai.vectorstore;
 
+import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.Pipeline;
+import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.search.FTSearchParams;
+import redis.clients.jedis.search.IndexDefinition;
 import redis.clients.jedis.search.IndexOptions;
 import redis.clients.jedis.search.Schema;
 import top.ningmao.myspring.ai.document.Document;
 import top.ningmao.myspring.ai.embedding.EmbeddingModel;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -87,8 +92,10 @@ public class RedisVectorStore implements VectorStore {
                                     "DISTANCE_METRIC", "COSINE"
                             ));
 
+            IndexDefinition indexDefinition = new IndexDefinition()
+                    .setPrefixes(new String[]{prefix});
             IndexOptions indexOptions = IndexOptions.defaultOptions()
-                    .setDefinition(new IndexOptions.Definition()
+                    .setDefinition(indexDefinition
                             .setPrefixes(new String[]{prefix}));
 
             jedis.ftCreate(indexName, indexOptions, schema);
