@@ -12,7 +12,7 @@ Sprout-AI 项目是深入学习Spring核心思想的实践项目，基于mini-sp
 
 **核心框架部分**：实现了IoC、AOP、资源加载器、事件监听器、类型转换、容器扩展点、bean生命周期管理、作用域控制、应用上下文、懒加载、包扫描、@Autowired/@Value注解及循环依赖解决等Spring核心功能。
 
-**AI应用部分**：参考Spring AI架构设计，实现了完整的AI Chat客户端框架，包括Prompt模板、消息管理、ChatMemory、Advisor链式调用、工具调用（Function Calling）、流式输出等企业级AI应用开发能力。
+**AI应用部分**：参考Spring AI架构设计，实现了完整的AI Chat客户端框架，包括Prompt模板、消息管理、ChatMemory、Advisor链式调用、工具调用（Function Calling）、流式输出、RAG等企业级AI应用开发能力。
 
 ## 使用技术栈
 
