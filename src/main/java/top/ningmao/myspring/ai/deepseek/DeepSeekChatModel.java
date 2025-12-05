@@ -103,7 +103,7 @@ public class DeepSeekChatModel implements StreamingChatModel {
                     .header("Authorization", "Bearer " + apiKey)
                     .header("Content-Type", "application/json")
                     .body(requestBody.toString())
-                    .timeout(60000)  // 30秒超时
+                    .timeout(180000)
                     .execute();
 
             // 3. 检查响应状态
@@ -128,8 +128,8 @@ public class DeepSeekChatModel implements StreamingChatModel {
             // 复制消息列表，用于累积对话历史
             List<Message> messages = new ArrayList<>(prompt.getMessages());
             
-            // 最多尝试 5 次工具调用（防止无限循环）
-            int maxIterations = 5;
+            // 最多尝试 15 次工具调用（防止无限循环）
+            int maxIterations = 15;
             for (int i = 0; i < maxIterations; i++) {
                 // 1. 构建新的 Prompt
                 Prompt currentPrompt = new Prompt(messages, prompt.getOptions());
@@ -140,7 +140,7 @@ public class DeepSeekChatModel implements StreamingChatModel {
                         .header("Authorization", "Bearer " + apiKey)
                         .header("Content-Type", "application/json")
                         .body(requestBody.toString())
-                        .timeout(30000)
+                        .timeout(60000) // 工具调用可能会慢，增加超时
                         .execute();
 
                 if (!response.isOk()) {
@@ -517,8 +517,8 @@ public class DeepSeekChatModel implements StreamingChatModel {
             // 复制消息列表，用于累积对话历史
             List<Message> messages = new ArrayList<>(prompt.getMessages());
             
-            // 最多尝试 5 次工具调用（防止无限循环）
-            int maxIterations = 5;
+            // 最多尝试 15 次工具调用（防止无限循环）
+            int maxIterations = 15;
             for (int i = 0; i < maxIterations; i++) {
                 // 1. 构建新的 Prompt
                 Prompt currentPrompt = new Prompt(messages, prompt.getOptions());

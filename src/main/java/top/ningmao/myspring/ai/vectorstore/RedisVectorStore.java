@@ -194,6 +194,8 @@ public class RedisVectorStore implements VectorStore {
             }).collect(Collectors.toList());
 
         } catch (Exception e) {
+            System.err.println(" RedisVectorStore 检索失败: " + e.getMessage());
+            e.printStackTrace();
             return Collections.emptyList();
         }
     }

@@ -1,11 +1,14 @@
 > [[宁猫出品，必属精品！]]
 
 
-# Sprout
+# Sprout-AI
 
 ## 项目简介
 
-Sprout项目是深入学习Spring核心思想的实践项目，基于mini-spring优化完善。曾为mini-spring贡献多个被合并的PR，注释与文档经润色更加详尽。
+项目地址：[Sprout-AI](https://gitee.com/ningmaoKing/Sprout-AI)
+作者：宁猫
+
+Sprout-AI 项目是深入学习Spring核心思想的实践项目，基于mini-spring优化完善。作者曾为mini-spring贡献多个被合并的PR，注释与文档经润色更加详尽。
 
 **核心框架部分**：实现了IoC、AOP、资源加载器、事件监听器、类型转换、容器扩展点、bean生命周期管理、作用域控制、应用上下文、懒加载、包扫描、@Autowired/@Value注解及循环依赖解决等Spring核心功能。
 
@@ -7419,9 +7422,134 @@ public void testBasicRAG() {
     System.out.println("✓ 基本 RAG 测试通过");
 }
 ```
+---
+
+
+### AI-RAG 篇章结语
+
+> 代码分支:  AI-completed
+
+单纯的单元测试已不足以展现本项目的魅力。因此，我们构建了一个 **Sprout-AI 学习助手**（位于 top.ningmao.myspring.ai.demo 包下）。
+
+这个 Demo 不仅仅是一个聊天机器人，它是 **Spring 核心机制** 与 **现代 AI 架构** 的集大成者。它能够通过 RAG 读取本项目文档，通过 Tool 读取本项目源码，从而辅助用户更好地学习 Sprout-AI 本身。
+
+####  🌱 Spring 核心框架的支撑
+
+整个 AI 应用的生命周期完全由我们手写的 IOC 容器托管：
+
+- **容器启动**：使用 ClassPathXmlApplicationContext 加载 ai-assistant-beans.xml。
+
+- **Bean 定义与扫描**：通过 **XML 解析** 配合 **@Component** 注解，实现 AIConfiguration、ChatController 等核心组件的自动扫描与注册。
+
+- **生命周期管理**：利用 **InitializingBean** 接口，在 AIConfiguration 中完成 Embedding 模型、向量数据库连接、ChatClient 的初始化工作。
+
+- **依赖注入**：通过 **@Autowired** (或构造器注入逻辑) 将 ChatModel、VectorStore 注入到业务 Bean 中。
+
+
+#### 2.  AI 应用能力的爆发
+
+基于稳固的 IOC 基座，我们实现了全链路的 AI 能力：
+
+- **RAG 闭环**：
+
+    - **文档处理**：Markdown 文档读取与切分。
+
+    - **Embedding**：接入 Embedding 模型将文档向量化。
+
+    - **VectorStore**：使用 Redis 存储向量索引，支持余弦相似度检索。
+
+    - **Advisor**：QuestionAnswerAdvisor 自动拦截请求，注入上下文。
+
+- **智能交互**：
+
+    - **DeepSeek 集成**：对接强大的 DeepSeek-V3/R1 模型。（注意R1不支持Tool调用）
+
+    - **Function Calling**：实现了 ProjectLearningTools，让 AI 能主动读取项目源码、查询容器 Bean 状态，实现“自我内省”。
+
+    - **Chat Client**：流式 API 设计，结合 Advisor 链式调用。
+
+    - **Stream 流式响应**：结合前端 SSE 技术，提供打字机式的流畅体验。
 
 
 
+```mermaid
+graph TD
+    %% 定义样式
+    classDef user fill:#eef2ff,stroke:#4f46e5,stroke-width:2px;
+    classDef container fill:#ecfdf5,stroke:#10b981,stroke-width:2px,stroke-dasharray: 5 5;
+    classDef ai_comp fill:#fff7ed,stroke:#f97316,stroke-width:2px;
+    classDef external fill:#f3f4f6,stroke:#6b7280,stroke-width:2px;
+    classDef db fill:#e0f2fe,stroke:#0ea5e9,stroke-width:2px;
+
+    %% 外部用户层
+    User([👤 用户]) -->|1. 发送问题| Browser[🌐 Web 浏览器 / 前端]
+    Browser -->|2. HTTP POST /api/chat| HttpServer[Java HttpServer]
+    
+    %% Sprout 容器边界
+    subgraph Sprout_Context [🌱 Sprout ApplicationContext]
+        direction TB
+        
+        HttpServer -->|分发请求| Controller[ChatController]
+        
+        %% 初始化阶段 (隐式)
+        subgraph Init_Phase [知识库初始化]
+            Loader[Markdown Loader] -->|读取文档| Splitter[Text Splitter]
+            Splitter -->|分块| EmbedModel_Init[Embedding Model]
+            EmbedModel_Init -->|向量化| VectorStore
+        end
+
+        %% 对话处理核心
+        Controller -->|3. 调用| ChatClient[🤖 ChatClient]
+        
+        %% RAG 流程
+        subgraph RAG_Flow [RAG 检索增强]
+            ChatClient -->|4. 请求拦截| Advisor[QuestionAnswerAdvisor]
+            Advisor -->|5. 语义检索| VectorStore[(Redis VectorStore)]
+            VectorStore -->|6. 返回相关文档| Advisor
+            Advisor -->|7. 注入 Context 到 Prompt| ChatClient
+        end
+
+        %% 模型交互与工具调用
+        ChatClient -->|8. 发送 Prompt| ChatModel[DeepSeek ChatModel]
+        
+        %% 工具箱
+        subgraph Tools [🛠️ ProjectLearningTools]
+            ToolScanner -->|注册| ChatModel
+            ChatModel <-->|9. Tool Call / Result| ToolExec[方法执行反射]
+            
+            ToolExec -.->|读取源码| FileSys[📂 文件系统]
+            ToolExec -.->|查询状态| BeanFactory[⚙️ BeanFactory]
+        end
+    end
+
+    %% 外部服务
+    subgraph Cloud_Services [☁️ 云端 API]
+        ChatModel <-->|HTTP/SSE| DeepSeek_API[DeepSeek V3/R1]
+        VectorStore <-->|HTTP| DashScope_API[阿里百炼 Embedding]
+    end
+
+    %% 响应流
+    DeepSeek_API -->|10. 流式 SSE 响应| ChatModel
+    ChatModel -->|流式传递| ChatClient
+    ChatClient -->|流式传递| Controller
+    Controller -->|Data Chunk| Browser
+    Browser -->|11. 逐字显示| User
+
+    %% 应用样式
+    class User,Browser user;
+    class Sprout_Context container;
+    class ChatClient,Advisor,ChatModel,ToolExec,Loader,Splitter ai_comp;
+    class DeepSeek_API,DashScope_API,HttpServer external;
+    class VectorStore,FileSys,BeanFactory db;
+```
+
+#### 演示效果
+
+![ai-completed-1.png](assets/ai-completed-1.png)
+
+![ai-completed-2.png](assets/ai-completed-2.png)
+
+![ai-completed-3.png](assets/ai-completed-3.png)
 
 
 

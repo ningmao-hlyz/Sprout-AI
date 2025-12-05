@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans>
+    
+    <!-- 使用 component-scan 自动扫描并注册带 @Component 注解的类 -->
+    <component-scan base-package="top.ningmao.myspring.ai.demo"/>
+    
+</beans>

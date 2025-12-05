@@ -71,10 +71,13 @@ public class ChatResponse implements ModelResponse<Generation> {
 
     /**
      * 获取 metadata
-     * @since 2025-11-28
+     * <p>
+     * 注意：这里返回的是内部的可变 Map，便于 Advisor 等在响应后直接写入元数据
+     *（例如检索到的文档、完整消息链等），后续读取方可以看到最新内容。
+     * @since 2025-12-04
      */
     public Map<String, Object> getMetadata() {
-        return new HashMap<>(metadata);
+        return metadata;
     }
 
     /**
