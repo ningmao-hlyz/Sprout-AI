@@ -14,6 +14,15 @@ Sprout-AI 项目是深入学习Spring核心思想的实践项目，基于mini-sp
 
 **AI应用部分**：参考Spring AI架构设计，实现了完整的AI Chat客户端框架，包括Prompt模板、消息管理、ChatMemory、Advisor链式调用、工具调用（Function Calling）、流式输出、RAG等企业级AI应用开发能力。
 
+
+#### 演示效果
+
+![ai-completed-1.png](assets/ai-completed-1.png)
+
+![ai-completed-2.png](assets/ai-completed-2.png)
+
+![ai-completed-3.png](assets/ai-completed-3.png)
+
 ## 使用技术栈
 
 ### 核心技术
@@ -7543,13 +7552,6 @@ graph TD
     class VectorStore,FileSys,BeanFactory db;
 ```
 
-#### 演示效果
-
-![ai-completed-1.png](assets/ai-completed-1.png)
-
-![ai-completed-2.png](assets/ai-completed-2.png)
-
-![ai-completed-3.png](assets/ai-completed-3.png)
 
 
 
