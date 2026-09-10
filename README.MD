@@ -8,7 +8,7 @@
 项目地址：[Sprout-AI](https://gitee.com/ningmaoKing/Sprout-AI)
 作者：宁猫
 
-Sprout-AI 项目是深入学习Spring核心思想的实践项目，基于mini-spring优化完善。作者曾为mini-spring贡献多个被合并的PR，注释与文档经润色更加详尽。
+Sprout-AI 项目是深入学习Spring核心思想的实践项目，基于mini-spring优化完善。作者曾为[mini-spring](https://github.com/DerekYRC/mini-spring) 贡献多个被合并的PR，注释与文档经润色更加详尽。
 
 **核心框架部分**：实现了IoC、AOP、资源加载器、事件监听器、类型转换、容器扩展点、bean生命周期管理、作用域控制、应用上下文、懒加载、包扫描、@Autowired/@Value注解及循环依赖解决等Spring核心功能。
 
